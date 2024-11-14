@@ -153,3 +153,7 @@ If you have any questions or want to use the code, feel free to contact:
 * Yong Liu (liuyong21@mails.tsinghua.edu.cn)
 * Haoran Zhang (z-hr20@mails.tsinghua.edu.cn)
 * Tengge Hu (htg21@mails.tsinghua.edu.cn)
+
+## To Run the model on gpu:
+chmod +x run_experiment.sh
+./run_experiment.sh
