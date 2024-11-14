@@ -15,10 +15,7 @@ PRED_LEN=1
 ENC_IN=3
 DEC_IN=3
 C_OUT=1
-USE_GPU=1
-USE_MULTI_GPU=1
 DEVICES="0,1"
-GPU=1
 TRAIN_EPOCHS=5
 BATCH_SIZE=32
 PATIENCE=1
@@ -40,10 +37,7 @@ python run.py --is_training 1 \
                --enc_in $ENC_IN \
                --dec_in $DEC_IN \
                --c_out $C_OUT \
-               --use_gpu $USE_GPU \
-               --use_multi_gpu $USE_MULTI_GPU \
                --devices $DEVICES \
-               --gpu $GPU \
                --train_epochs $TRAIN_EPOCHS \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
@@ -65,7 +59,5 @@ python run.py --is_training 0 \
                --enc_in $ENC_IN \
                --dec_in $DEC_IN \
                --c_out $C_OUT \
-               --use_gpu $USE_GPU \
-               --use_multi_gpu $USE_MULTI_GPU \
                --devices $DEVICES \
-               --gpu $GPU
+
