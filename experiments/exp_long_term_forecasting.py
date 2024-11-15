@@ -82,9 +82,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
-        print(f"Train loader has {len(train_loader)} batches. Validation loader has {len(vali_loader)} batches.")
-        print(f"train data_x shape: {train_data.data_x.shape}, vali data_y shape: {vali_data.data_y.shape}")
-        print(f"train data_y shape: {train_data.data_y.shape}, vali data_y shape: {vali_data.data_y.shape}")    
+        print(f"Train loader has {len(train_loader)} batches, each with input shape - (batch_size, seq_len, num_features). Validation loader has {len(vali_loader)} batches, each with similar input structure.")
+        print(f"Train data shape - x: {train_data.data_x.shape}, y: {train_data.data_y.shape}")
+        print(f"Validation data shape - x: {vali_data.data_x.shape}, y: {vali_data.data_y.shape}")
+        
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
@@ -109,7 +110,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
                 if iter_count == 0:
-                    print(f"batch_x shape: {batch_x.shape}, batch_y shape: {batch_y.shape}")
+                    print(f"Batch 0 shape - x: {batch_x.shape}, y: {batch_y.shape}, x_mark: {batch_x_mark.shape}, y_mark: {batch_y_mark.shape} (expected: batch_size, seq_len, num_features or pred_len)")
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
@@ -188,7 +189,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def test(self, setting, test=0):
         # Ensure the test data loader uses a separate dataset file
         test_data, test_loader = self._get_data(flag='test')  # Test data should now point to a dedicated test file
-        print(f"Test loader has {len(test_loader)} batches of shape x: {test_data.data_x.shape} and y: {test_data.data_y.shape}")
+        print(f"Test loader has {len(test_loader)} batches. Batch input shape - x: (batch_size, seq_len, num_features), y: (batch_size, pred_len, output_dim)")
 
         if test:
             print('loading model')
