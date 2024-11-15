@@ -4,9 +4,9 @@
 MODEL_ID="custom_model"
 MODEL="iTransformer"
 DATA="custom"
-ROOT_PATH="./data/sample_data"
-TRAIN_DATA="sample_train_data.csv"
-TEST_DATA="sample_test_data.csv"
+ROOT_PATH="./data/"
+TRAIN_DATA="itransformer_train.csv"
+TEST_DATA="itransformer_test.csv"
 FEATURES="MS"
 TARGET="Voltage"
 SEQ_LEN=60
