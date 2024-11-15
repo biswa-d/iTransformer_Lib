@@ -230,19 +230,32 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_y = batch_y.detach().cpu().numpy()
 
                 if test_data.scale and self.args.inverse:
-                    outputs = test_data.inverse_transform(outputs.squeeze(0)).reshape(outputs.shape)
-                    batch_y = test_data.inverse_transform(batch_y.squeeze(0)).reshape(batch_y.shape)
-                
-                print(f"Batch {i}: outputs shape = {outputs.shape}")
-                print(f"Batch {i}: batch_y shape = {batch_y.shape}")
-                preds.append(outputs)
-                trues.append(batch_y)
+                    shape = outputs.shape
+                    outputs = test_data.inverse_transform(outputs.squeeze(0)).reshape(shape)
+                    batch_y = test_data.inverse_transform(batch_y.squeeze(0)).reshape(shape)
 
-        # Post-process predictions and true values
-        preds = np.array(preds).reshape(-1, preds.shape[-2], preds.shape[-1])
-        trues = np.array(trues).reshape(-1, trues.shape[-2], trues.shape[-1])
+                pred = outputs
+                true = batch_y
 
-        print('Test shape:', preds.shape, trues.shape)
+                preds.append(pred)
+                trues.append(true)
+
+                # if i % 20 == 0:
+                #     input = batch_x.detach().cpu().numpy()
+                #     if test_data.scale and self.args.inverse:
+                #         shape = input.shape
+                #         input = test_data.inverse_transform(input.squeeze(0)).reshape(shape)
+                #     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
+                #     pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
+                #     visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
+
+        preds = np.array(preds)
+        trues = np.array(trues)
+        print('test shape:', preds.shape, trues.shape)
+
+        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
+        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
+        print('test shape:', preds.shape, trues.shape)
 
         # Save results
         folder_path = './results/' + setting + '/'
