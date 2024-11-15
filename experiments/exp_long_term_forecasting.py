@@ -83,7 +83,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
         print(f"Train loader has {len(train_loader)} batches. Validation loader has {len(vali_loader)} batches.")
-        print(f"train data shape: {train_data.data.shape}, vali data shape: {vali_data.data.shape}")    
+        print(f"train data_x shape: {train_data.data_x.shape}, vali data_y shape: {vali_data.data_y.shape}")
+        print(f"train data_y shape: {train_data.data_y.shape}, vali data_y shape: {vali_data.data_y.shape}")    
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
