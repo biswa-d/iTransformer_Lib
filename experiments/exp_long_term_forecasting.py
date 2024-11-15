@@ -183,6 +183,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def test(self, setting, test=0):
         # Ensure the test data loader uses a separate dataset file
         test_data, test_loader = self._get_data(flag='test')  # Test data should now point to a dedicated test file
+        print(f"Test loader has {len(test_loader)} batches.")
 
         if test:
             print('loading model')
@@ -211,9 +212,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # Prediction logic
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        if self.args.output_attention:
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                        else:
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                 else:
-                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    if self.args.output_attention:
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                    else:
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+
 
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
@@ -224,7 +232,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 if test_data.scale and self.args.inverse:
                     outputs = test_data.inverse_transform(outputs.squeeze(0)).reshape(outputs.shape)
                     batch_y = test_data.inverse_transform(batch_y.squeeze(0)).reshape(batch_y.shape)
-
+                
+                print(f"Batch {i}: outputs shape = {outputs.shape}")
+                print(f"Batch {i}: batch_y shape = {batch_y.shape}")
                 preds.append(outputs)
                 trues.append(batch_y)
 
