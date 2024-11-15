@@ -41,7 +41,7 @@ python run.py --is_training 1 \
                --train_epochs $TRAIN_EPOCHS \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
-               --learning_rate $LEARNING_RATE \
+               --learning_rate $LEARNING_RATE
 
 # Test the model
 echo "Starting testing on GPUs $DEVICES..."
@@ -59,5 +59,5 @@ python run.py --is_training 0 \
                --enc_in $ENC_IN \
                --dec_in $DEC_IN \
                --c_out $C_OUT \
-               --devices $DEVICES \
+               --devices $DEVICES
 
