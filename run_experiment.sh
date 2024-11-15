@@ -9,19 +9,16 @@ TRAIN_DATA="sample_train_data.csv"
 TEST_DATA="sample_test_data.csv"
 FEATURES="MS"
 TARGET="Voltage"
-SEQ_LEN=200
+SEQ_LEN=60
 LABEL_LEN=0
 PRED_LEN=1
 ENC_IN=3
 DEC_IN=3
 C_OUT=1
-USE_GPU=1
-USE_MULTI_GPU=True
 DEVICES="0,1"
-GPU=1
-TRAIN_EPOCHS=50
-BATCH_SIZE=32
-PATIENCE=5
+TRAIN_EPOCHS=5000
+BATCH_SIZE=400
+PATIENCE=50
 LEARNING_RATE=0.0001
 
 # Train the model
@@ -40,10 +37,7 @@ python run.py --is_training 1 \
                --enc_in $ENC_IN \
                --dec_in $DEC_IN \
                --c_out $C_OUT \
-               --use_gpu $USE_GPU \
-               --use_multi_gpu $USE_MULTI_GPU \
                --devices $DEVICES \
-               --gpu $GPU \
                --train_epochs $TRAIN_EPOCHS \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
@@ -65,7 +59,5 @@ python run.py --is_training 0 \
                --enc_in $ENC_IN \
                --dec_in $DEC_IN \
                --c_out $C_OUT \
-               --use_gpu $USE_GPU \
-               --use_multi_gpu $USE_MULTI_GPU \
-               --devices $DEVICES \
-               --gpu $GPU
+               --devices $DEVICES 
+
