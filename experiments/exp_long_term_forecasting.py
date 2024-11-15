@@ -108,6 +108,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             self.model.train()
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
+                if iter_count == 0:
+                    print(f"batch_x shape: {batch_x.shape}, batch_y shape: {batch_y.shape}")
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
@@ -186,7 +188,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def test(self, setting, test=0):
         # Ensure the test data loader uses a separate dataset file
         test_data, test_loader = self._get_data(flag='test')  # Test data should now point to a dedicated test file
-        print(f"Test loader has {len(test_loader)} batches of shape {test_data.data.shape}")
+        print(f"Test loader has {len(test_loader)} batches of shape x: {test_data.data_x.shape} and y: {test_data.data_y.shape}")
 
         if test:
             print('loading model')
