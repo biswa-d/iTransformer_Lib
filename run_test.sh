@@ -16,7 +16,5 @@ python run.py --is_training 0 \
                --enc_in 3 \
                --dec_in 3 \
                --c_out 1 \
-               --use_gpu True \
-               --use_multi_gpu True \
                --devices "1,2" \
                --gpu 1
