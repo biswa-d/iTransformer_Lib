@@ -239,7 +239,7 @@ class Dataset_Custom(Dataset):
         # Define input features and target feature
         if self.features in ['M', 'MS']:
             # Explicitly specify which features to use for input
-            input_features = ['SOC', 'Current', 'Temperature']
+            input_features = ['SOC', 'Current', 'Temp']
             df_data_x = df_raw[input_features]
             df_data_y = df_raw[[self.target]]  # Only the target feature (Voltage)
         elif self.features == 'S':
