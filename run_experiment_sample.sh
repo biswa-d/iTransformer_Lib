@@ -42,7 +42,6 @@ python run.py --is_training 1 \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
-               --use_multi_gpu True
 
 # Test the model
 echo "Starting testing on GPUs $DEVICES..."
