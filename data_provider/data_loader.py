@@ -234,7 +234,7 @@ class Dataset_Custom(Dataset):
             num_vali = len(df_raw) - num_train
             border1, border2 = num_train - self.seq_len, len(df_raw)
         elif self.flag == 'test':
-            border1, border2 = 0, len(df_raw)  # Full data for testing
+            border1, border2 = 0, len(df_raw) - self.seq_len + 1
 
         # Define input features and target feature
         if self.features in ['M', 'MS']:
