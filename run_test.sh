@@ -16,5 +16,5 @@ python run.py --is_training 0 \
                --enc_in 3 \
                --dec_in 3 \
                --c_out 1 \
-               --devices "1,2" \
+               --devices "0,1" \
                --gpu 1
