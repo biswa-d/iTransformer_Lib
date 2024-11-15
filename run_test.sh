@@ -7,7 +7,7 @@ python run.py --is_training 0 \
                --model "iTransformer" \
                --data custom \
                --root_path ./data/sample_data \
-               --data_path sample_data_test.csv \  # Specify your new test data file
+               --data_path sample_data_test.csv \
                --features MS \
                --target Voltage \
                --seq_len 200 \
