@@ -82,10 +82,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
-        print(f"Train loader has {len(train_loader)} batches, each with input shape - x: ({train_data.data_x.shape[0]}, {train_data.data_x.shape[1]}, {train_data.data_x.shape[2]})")
-        print(f"Validation loader has {len(vali_loader)} batches, each with input shape - x: ({vali_data.data_x.shape[0]}, {vali_data.data_x.shape[1]}, {vali_data.data_x.shape[2]})")
-        print(f"Train data shape - x: {train_data.data_x.shape}, y: {train_data.data_y.shape}")
-        print(f"Validation data shape - x: {vali_data.data_x.shape}, y: {vali_data.data_y.shape}")
+        # Determine the shape of train_data.data_x properly
+        if len(train_data.data_x.shape) == 3:
+            num_samples, seq_len, num_features = train_data.data_x.shape
+            print(f"Train loader has {len(train_loader)} batches, each with input shape - x: ({num_samples}, {seq_len}, {num_features})")
+        elif len(train_data.data_x.shape) == 2:
+            num_samples, num_features = train_data.data_x.shape
+            print(f"Train loader has {len(train_loader)} batches, each with input shape - x: ({num_samples}, {num_features})")
+        else:
+            print(f"Train loader has {len(train_loader)} batches, but train_data.data_x has an unexpected shape: {train_data.data_x.shape}")
+
 
         
 
