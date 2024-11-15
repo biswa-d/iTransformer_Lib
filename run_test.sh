@@ -10,7 +10,7 @@ python run.py --is_training 0 \
                --data_path sample_data_test.csv \
                --features MS \
                --target Voltage \
-               --seq_len 200 \
+               --seq_len 60 \
                --label_len 0 \
                --pred_len 1 \
                --enc_in 3 \

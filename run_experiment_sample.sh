@@ -44,21 +44,21 @@ python run.py --is_training 1 \
                --learning_rate $LEARNING_RATE \
                --use_multi_gpu True
 
-# # Test the model
-# echo "Starting testing on GPUs $DEVICES..."
-# python run.py --is_training 0 \
-#                --model_id $MODEL_ID \
-#                --model $MODEL \
-#                --data $DATA \
-#                --root_path $ROOT_PATH \
-#                --data_path $TEST_DATA \
-#                --features $FEATURES \
-#                --target $TARGET \
-#                --seq_len $SEQ_LEN \
-#                --label_len $LABEL_LEN \
-#                --pred_len $PRED_LEN \
-#                --enc_in $ENC_IN \
-#                --dec_in $DEC_IN \
-#                --c_out $C_OUT \
-#                --devices $DEVICES \
+# Test the model
+echo "Starting testing on GPUs $DEVICES..."
+python run.py --is_training 0 \
+               --model_id $MODEL_ID \
+               --model $MODEL \
+               --data $DATA \
+               --root_path $ROOT_PATH \
+               --data_path $TEST_DATA \
+               --features $FEATURES \
+               --target $TARGET \
+               --seq_len $SEQ_LEN \
+               --label_len $LABEL_LEN \
+               --pred_len $PRED_LEN \
+               --enc_in $ENC_IN \
+               --dec_in $DEC_IN \
+               --c_out $C_OUT \
+               --devices $DEVICES \
 
