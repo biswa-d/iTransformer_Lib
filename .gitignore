@@ -131,4 +131,6 @@ dmypy.json
 .pyre/
 
 #data
-data/
+data/checkpoints/
+results/
+update_and_run.sh
