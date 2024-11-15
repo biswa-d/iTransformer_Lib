@@ -82,9 +82,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
-        print(f"Train loader has {len(train_loader)} batches, each with input shape - (batch_size, seq_len, num_features). Validation loader has {len(vali_loader)} batches, each with similar input structure.")
+        print(f"Train loader has {len(train_loader)} batches, each with input shape - x: ({train_data.data_x.shape[0]}, {train_data.data_x.shape[1]}, {train_data.data_x.shape[2]})")
+        print(f"Validation loader has {len(vali_loader)} batches, each with input shape - x: ({vali_data.data_x.shape[0]}, {vali_data.data_x.shape[1]}, {vali_data.data_x.shape[2]})")
         print(f"Train data shape - x: {train_data.data_x.shape}, y: {train_data.data_y.shape}")
         print(f"Validation data shape - x: {vali_data.data_x.shape}, y: {vali_data.data_y.shape}")
+
         
 
         path = os.path.join(self.args.checkpoints, setting)
@@ -110,7 +112,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
                 if iter_count == 0:
-                    print(f"Batch 0 shape - x: {batch_x.shape}, y: {batch_y.shape}, x_mark: {batch_x_mark.shape}, y_mark: {batch_y_mark.shape} (expected: batch_size, seq_len, num_features or pred_len)")
+                    print(f"Batch 0 shape - x: ({batch_x.shape[0]}, {batch_x.shape[1]}, {batch_x.shape[2]}), y: ({batch_y.shape[0]}, {batch_y.shape[1]}, {batch_y.shape[2]})")
+                    print(f"x_mark shape: {batch_x_mark.shape}, y_mark shape: {batch_y_mark.shape}")
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
@@ -189,8 +192,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def test(self, setting, test=0):
         # Ensure the test data loader uses a separate dataset file
         test_data, test_loader = self._get_data(flag='test')  # Test data should now point to a dedicated test file
-        print(f"Test loader has {len(test_loader)} batches. Batch input shape - x: (batch_size, seq_len, num_features), y: (batch_size, pred_len, output_dim)")
-
+        for batch_x, batch_y, _, _ in test_loader:
+            batch_size, seq_len, num_features = batch_x.shape
+            pred_len, output_dim = batch_y.shape[1], batch_y.shape[2] if len(batch_y.shape) > 2 else 1
+            print(f"Test loader has {len(test_loader)} batches. Batch input shape - x: ({batch_size}, {seq_len}, {num_features}), y: ({batch_size}, {pred_len}, {output_dim})")
+            break  # Print once, then break since shape is consistent across batches
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
