@@ -287,12 +287,7 @@ class Dataset_Custom(Dataset):
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
     def __len__(self):
-        if self.flag == 'test':
-            # Return length as 1 since the entire dataset is treated as one batch
-            return len(self.data_x) - self.seq_len + 1
-        else:
-            # Original logic for train/val
-            return len(self.data_x) - self.seq_len - self.pred_len + 1
+        return len(self.data_x) - self.seq_len - self.pred_len + 1
 
 
     def inverse_transform(self, data):
