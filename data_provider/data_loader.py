@@ -234,7 +234,7 @@ class Dataset_Custom(Dataset):
             num_vali = len(df_raw) - num_train
             border1, border2 = num_train - self.seq_len, len(df_raw)
         elif self.flag == 'test':
-            border1, border2 = 0, len(df_raw) - self.seq_len + 1
+            border1, border2 = 0, len(df_raw)
 
         # Define input features and target feature
         if self.features in ['M', 'MS']:
@@ -294,7 +294,7 @@ class Dataset_Custom(Dataset):
     def __len__(self):
         if self.flag == 'test':
             # Return length as 1 since the entire dataset is treated as one batch
-            return 1
+            return len(self.data_x) - self.seq_len + 1
         else:
             # Original logic for train/val
             return len(self.data_x) - self.seq_len - self.pred_len + 1
