@@ -93,8 +93,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             print(f"Train loader has {len(train_loader)} batches, but train_data.data_x has an unexpected shape: {train_data.data_x.shape}")
 
 
-        
-
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
             os.makedirs(path)
@@ -119,12 +117,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
                 if iter_count == 0:
                     print(f"Batch 0 shape - x: ({batch_x.shape[0]}, {batch_x.shape[1]}, {batch_x.shape[2]}), y: ({batch_y.shape[0]}, {batch_y.shape[1]}, {batch_y.shape[2]})")
-                    print(f"x_mark shape: {batch_x_mark.shape}, y_mark shape: {batch_y_mark.shape}")
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
-                if 'PEMS' in self.args.data or 'Solar' in self.args.data:
+                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data: # Adjust for datasets without marks (e.g., timestamp features)
                     batch_x_mark = None
                     batch_y_mark = None
                 else:
