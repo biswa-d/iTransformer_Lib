@@ -15,6 +15,13 @@ PRED_LEN=1
 ENC_IN=3
 DEC_IN=3
 C_OUT=1
+D_MODEL=512
+N_HEADS=8
+E_LAYERS=2
+D_LAYERS=1
+D_FF=2048
+MOVING_AVG=25
+FACTOR=1
 DEVICES="0,1"
 TRAIN_EPOCHS=5000
 BATCH_SIZE=400
@@ -37,6 +44,13 @@ python run.py --is_training 1 \
                --enc_in $ENC_IN \
                --dec_in $DEC_IN \
                --c_out $C_OUT \
+               --d_model $D_MODEL \
+               --n_heads $N_HEADS \
+               --e_layers $E_LAYERS \
+               --d_layers $D_LAYERS \
+               --d_ff $D_FF \
+               --moving_avg $MOVING_AVG \
+               --factor $FACTOR \
                --devices $DEVICES \
                --train_epochs $TRAIN_EPOCHS \
                --batch_size $BATCH_SIZE \
@@ -59,5 +73,11 @@ python run.py --is_training 0 \
                --enc_in $ENC_IN \
                --dec_in $DEC_IN \
                --c_out $C_OUT \
-               --devices $DEVICES 
-
+               --d_model $D_MODEL \
+               --n_heads $N_HEADS \
+               --e_layers $E_LAYERS \
+               --d_layers $D_LAYERS \
+               --d_ff $D_FF \
+               --moving_avg $MOVING_AVG \
+               --factor $FACTOR \
+               --devices $DEVICES
