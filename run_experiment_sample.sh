@@ -52,7 +52,7 @@ python run.py --is_training 0 \
                --data_path $TEST_DATA \
                --features $FEATURES \
                --target $TARGET \
-               --seq_len 1 \
+               --seq_len $SEQ_LEN \
                --label_len $LABEL_LEN \
                --pred_len $PRED_LEN \
                --enc_in $ENC_IN \
