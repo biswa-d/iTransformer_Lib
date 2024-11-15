@@ -236,18 +236,26 @@ class Dataset_Custom(Dataset):
         elif self.flag == 'test':
             border1, border2 = 0, len(df_raw)  # Full data for testing
 
+        # Define input features and target feature
         if self.features in ['M', 'MS']:
-            cols_data = df_raw.columns[1:]
-            df_data = df_raw[cols_data]
+            # Explicitly specify which features to use for input
+            input_features = ['SOC', 'Current', 'Temperature']
+            df_data_x = df_raw[input_features]
+            df_data_y = df_raw[[self.target]]  # Only the target feature (Voltage)
         elif self.features == 'S':
-            df_data = df_raw[[self.target]]
+            df_data_x = df_raw[[self.target]]  # Only the target feature (Voltage)
+            df_data_y = df_raw[[self.target]]
 
+        # Scale the input data
         if self.scale:
-            train_data = df_data[:border2 if self.flag != 'test' else len(df_raw)]
+            train_data = df_data_x[:border2 if self.flag != 'test' else len(df_raw)]
             self.scaler.fit(train_data.values)
-            data = self.scaler.transform(df_data.values)
+            data_x = self.scaler.transform(df_data_x.values)
         else:
-            data = df_data.values
+            data_x = df_data_x.values
+
+        # Target data is not scaled (can be if required, but typically it’s left as-is)
+        data_y = df_data_y.values
 
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
@@ -261,8 +269,8 @@ class Dataset_Custom(Dataset):
             data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
             data_stamp = data_stamp.transpose(1, 0)
 
-        self.data_x = data[border1:border2]
-        self.data_y = data[border1:border2]
+        self.data_x = data_x[border1:border2]
+        self.data_y = data_y[border1:border2]
         self.data_stamp = data_stamp
 
     def __getitem__(self, index):
