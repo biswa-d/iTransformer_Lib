@@ -6,7 +6,7 @@ MODEL="iTransformer"
 DATA="custom"
 ROOT_PATH="./data/sample_data"
 TRAIN_DATA="sample_data_train.csv"
-#TEST_DATA="sample_data_test.csv"
+TEST_DATA="sample_data_test.csv"
 FEATURES="MS"
 TARGET="Voltage"
 SEQ_LEN=60
@@ -18,7 +18,7 @@ C_OUT=1
 DEVICES="0,1"
 TRAIN_EPOCHS=5
 BATCH_SIZE=32
-PATIENCE=1
+PATIENCE=3
 LEARNING_RATE=0.0001
 
 # Train the model
