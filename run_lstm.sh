@@ -12,9 +12,10 @@ TARGET="Voltage"
 SEQ_LEN=400
 LABEL_LEN=0
 PRED_LEN=1
-ENC_IN=3
-DEC_IN=3
-C_OUT=1
+ENC_IN=3  # Number of input features (Voltage, SOC, etc.)
+D_MODEL=10  # Size of hidden layer in LSTM
+C_OUT=1  # Output size (prediction of Voltage)
+E_LAYERS=2  # Number of LSTM layers
 DEVICES="0,1"
 TRAIN_EPOCHS=5000
 BATCH_SIZE=400
@@ -35,8 +36,9 @@ python run.py --is_training 1 \
                --label_len $LABEL_LEN \
                --pred_len $PRED_LEN \
                --enc_in $ENC_IN \
-               --dec_in $DEC_IN \
+               --d_model $D_MODEL \
                --c_out $C_OUT \
+               --e_layers $E_LAYERS \
                --devices $DEVICES \
                --train_epochs $TRAIN_EPOCHS \
                --batch_size $BATCH_SIZE \
@@ -57,6 +59,7 @@ python run.py --is_training 0 \
                --label_len $LABEL_LEN \
                --pred_len $PRED_LEN \
                --enc_in $ENC_IN \
-               --dec_in $DEC_IN \
+               --d_model $D_MODEL \
                --c_out $C_OUT \
+               --e_layers $E_LAYERS \
                --devices $DEVICES
