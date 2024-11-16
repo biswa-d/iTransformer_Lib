@@ -9,7 +9,7 @@ TRAIN_DATA="itransformer_train.csv"
 TEST_DATA="itransformer_test.csv"
 FEATURES="MS"
 TARGET="Voltage"
-SEQ_LEN=100
+SEQ_LEN=400
 LABEL_LEN=0
 PRED_LEN=1
 ENC_IN=3
@@ -25,8 +25,8 @@ FACTOR=1
 DEVICES="0,1"
 TRAIN_EPOCHS=5000
 BATCH_SIZE=200
-PATIENCE=100
-LEARNING_RATE=0.001
+PATIENCE=200
+LEARNING_RATE=0.01
 
 # Train the model
 echo "Starting training on GPUs $DEVICES..."
