@@ -43,7 +43,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(vali_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
-                if 'PEMS' in self.args.data or 'Solar' in self.args.data:
+                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data:
                     batch_x_mark = None
                     batch_y_mark = None
                 else:
@@ -216,9 +216,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
 
-                # Adjust for datasets without marks (e.g., timestamp features)
-                batch_x_mark = batch_x_mark.float().to(self.device) if batch_x_mark is not None else None
-                batch_y_mark = batch_y_mark.float().to(self.device) if batch_y_mark is not None else None
+                # Update for datasets without marks
+                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data:
+                    batch_x_mark = None
+                    batch_y_mark = None
+                else:
+                    batch_x_mark = batch_x_mark.float().to(self.device)
+                    batch_y_mark = batch_y_mark.float().to(self.device)
 
                 # Decoder input preparation
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
