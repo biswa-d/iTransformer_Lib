@@ -13,12 +13,12 @@ SEQ_LEN=400
 LABEL_LEN=0
 PRED_LEN=1
 ENC_IN=3  # Number of input features (Voltage, SOC, etc.)
-D_MODEL=10  # Size of hidden layer in LSTM
+D_MODEL=16  # Size of hidden layer in LSTM
 C_OUT=1  # Output size (prediction of Voltage)
 E_LAYERS=2  # Number of LSTM layers
 DEVICES="0,1"
 TRAIN_EPOCHS=5000
-BATCH_SIZE=400
+BATCH_SIZE=300
 PATIENCE=100
 LEARNING_RATE=0.0001
 

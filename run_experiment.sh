@@ -2,14 +2,14 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="iTransformer"
+MODEL="Informer"
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="itransformer_train.csv"
 TEST_DATA="itransformer_test.csv"
 FEATURES="MS"
 TARGET="Voltage"
-SEQ_LEN=400
+SEQ_LEN=200
 LABEL_LEN=0
 PRED_LEN=1
 ENC_IN=3
@@ -24,7 +24,7 @@ MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
 TRAIN_EPOCHS=5000
-BATCH_SIZE=400
+BATCH_SIZE=300
 PATIENCE=100
 LEARNING_RATE=0.001
 
