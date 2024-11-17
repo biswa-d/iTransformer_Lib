@@ -17,7 +17,6 @@ D_MODEL=128  # Size of hidden layer in xLSTM (higher than LSTM to accommodate mo
 C_OUT=1  # Output size (prediction of Voltage)
 E_LAYERS=7  # Number of xLSTM layers (can be more than LSTM layers)
 N_HEADS=4  # Number of heads for multi-head operations in xLSTM
-USE_NORM=True  # Apply input normalization
 OUTPUT_ATTENTION=False  # Output attention weights (not needed here)
 DEVICES="0,1"
 TRAIN_EPOCHS=5000
@@ -43,7 +42,6 @@ python run.py --is_training 1 \
                --c_out $C_OUT \
                --e_layers $E_LAYERS \
                --n_heads $N_HEADS \
-               --use_norm $USE_NORM \
                --output_attention $OUTPUT_ATTENTION \
                --devices $DEVICES \
                --train_epochs $TRAIN_EPOCHS \
@@ -69,6 +67,5 @@ python run.py --is_training 0 \
                --c_out $C_OUT \
                --e_layers $E_LAYERS \
                --n_heads $N_HEADS \
-               --use_norm $USE_NORM \
                --output_attention $OUTPUT_ATTENTION \
                --devices $DEVICES
