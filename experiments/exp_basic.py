@@ -19,7 +19,7 @@ class Exp_Basic(object):
             'iFlowformer': iFlowformer,
             'iFlashformer': iFlashformer,
             'LSTM': LSTM,
-            xLSTM: xLSTM,
+            'xLSTM': xLSTM,
         }
         self.device = self._acquire_device()
         self.model = self._build_model().to(self.device)
