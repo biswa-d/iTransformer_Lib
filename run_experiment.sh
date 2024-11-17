@@ -2,7 +2,7 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="Informer"
+MODEL="Reformer"
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="itransformer_train.csv"
