@@ -2,11 +2,11 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="Reformer"
+MODEL="iTransformer"
 DATA="custom"
 ROOT_PATH="./data/"
-TRAIN_DATA="itransformer_train.csv"
-TEST_DATA="itransformer_test.csv"
+TRAIN_DATA="train_scaled_tesla.csv.csv"
+TEST_DATA="test_scaled_tesla.csv.csv"
 FEATURES="MS"
 TARGET="Voltage"
 SEQ_LEN=200
@@ -16,7 +16,7 @@ ENC_IN=3
 DEC_IN=3
 C_OUT=1
 D_MODEL=512
-N_HEADS=8
+N_HEADS=16
 E_LAYERS=2
 D_LAYERS=1
 D_FF=2048
