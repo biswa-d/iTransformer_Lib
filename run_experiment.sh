@@ -2,7 +2,7 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="iTransformer"
+MODEL="LSTM"  # Change model to LSTM for comparison
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="train_scaled_tesla.csv"
