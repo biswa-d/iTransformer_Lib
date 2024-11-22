@@ -5,10 +5,13 @@ from utils.metrics import metric
 import torch
 import torch.nn as nn
 from torch import optim
-import os
+import os, argparse
 import time
 import warnings
 import numpy as np
+from ray import tune
+from ray.tune.schedulers import ASHAScheduler
+import json
 
 warnings.filterwarnings('ignore')
 
@@ -78,6 +81,68 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
+
+    def tune_train(self):
+        def tune_model(config):
+            # Convert Ray Tune config to arguments
+            tune_args = argparse.Namespace(**config)
+            tune_args.is_training = True
+            tune_args.use_gpu = torch.cuda.is_available()
+
+            # Instantiate the experiment with the arguments
+            exp = Exp_Long_Term_Forecast(tune_args)
+            exp.train("tuning")
+
+            # Evaluate validation loss to report back to Ray Tune
+            val_loss = exp.vali(exp.vali_data, exp.vali_loader, exp._select_criterion())
+            tune.report(loss=val_loss)
+
+        # Define hyperparameter search space
+        search_space = {
+            'seq_len': tune.choice([50, 100, 200]),
+            'pred_len': 1,
+            'e_layers': tune.randint(1, 4),
+            'd_model': tune.choice([32, 64, 128]),
+            'n_heads': tune.choice([8, 16]),
+            'd_ff': tune.choice([512, 1024, 2048]),
+            'learning_rate': tune.loguniform(1e-5, 1e-3),
+            'batch_size': tune.choice([16, 32, 64, 128]),
+            'dropout': tune.uniform(0.1, 0.5),
+            'train_epochs': tune.randint(10, 100),
+            'is_training': True,
+            'use_gpu': torch.cuda.is_available(),
+        }
+
+        # Scheduler to manage trials
+        scheduler = ASHAScheduler(
+            metric="loss",
+            mode="min",
+            max_t=100,
+            grace_period=5,
+            reduction_factor=2
+        )
+
+        # Run hyperparameter tuning
+        analysis = tune.run(
+            tune_model,
+            config=search_space,
+            num_samples=10,
+            scheduler=scheduler,
+            resources_per_trial={"cpu": 4, "gpu": 1},
+            metric="loss",
+            mode="min",
+            checkpoint_at_end=True
+        )
+
+        # Get the best configuration
+        best_config = analysis.get_best_config(metric="loss", mode="min")
+        print(f"Best hyperparameters found: {best_config}")
+
+        # Save the best configuration to use for testing
+        with open("best_config.json", "w") as f:
+            json.dump(best_config, f)
+
+        return best_config
 
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
