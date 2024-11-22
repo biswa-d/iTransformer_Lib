@@ -2,7 +2,7 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="Reformer"  # Change model to Reformer for comparison
+MODEL="iReformer"  # Change model to Reformer for comparison
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="itransformer_train.csv"
