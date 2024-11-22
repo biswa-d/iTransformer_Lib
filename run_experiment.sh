@@ -2,11 +2,11 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="LSTM"  # Change model to LSTM for comparison
+MODEL="iTransformer"  # Change model to LSTM for comparison
 DATA="custom"
 ROOT_PATH="./data/"
-TRAIN_DATA="train_scaled_tesla.csv"
-TEST_DATA="test_scaled_tesla.csv"
+TRAIN_DATA="train_sorted_tesla.csv"
+TEST_DATA="test_sorted_tesla.csv"
 FEATURES="MS"
 TARGET="Voltage"
 SEQ_LEN=200
@@ -25,7 +25,7 @@ FACTOR=1
 DEVICES="0,1"
 TRAIN_EPOCHS=5000
 BATCH_SIZE=500
-PATIENCE=100
+PATIENCE=25
 LEARNING_RATE=0.001
 
 # Train the model
