@@ -14,6 +14,7 @@ class Model(nn.Module):
 
     def __init__(self, configs):
         super(Model, self).__init__()
+        self.needs_decoder_input = True
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
         self.output_attention = configs.output_attention
