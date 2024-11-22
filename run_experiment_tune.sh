@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Set basic parameters for running the experiment
+# Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="iTransformer"
+MODEL="iTransformer"  # Change model to LSTM for comparison
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="train_sorted_tesla.csv"
@@ -28,9 +28,10 @@ BATCH_SIZE=500
 PATIENCE=25
 LEARNING_RATE=0.001
 
-# Hyperparameter tuning and training the model
+# Hyperparameter tuning and training
 echo "Starting hyperparameter tuning and training on GPUs $DEVICES..."
-python run_tune.py --tune_and_train True \
+python run_tune.py --is_training 1 \  # <-- This line is added
+                   --tune_and_train 1 \
                    --model_id $MODEL_ID \
                    --model $MODEL \
                    --data $DATA \
@@ -57,9 +58,10 @@ python run_tune.py --tune_and_train True \
                    --patience $PATIENCE \
                    --learning_rate $LEARNING_RATE
 
-# Test the model with the best configuration found
+# Test the best model with the best hyperparameters found
 echo "Starting testing on GPUs $DEVICES..."
-python run_tune.py --test_best True \
+python run_tune.py --test_best 1 \
+                   --is_training 0 \  # <-- This line is added
                    --model_id $MODEL_ID \
                    --model $MODEL \
                    --data $DATA \
