@@ -17,8 +17,6 @@ class Model(nn.Module):
         bucket_size: int, 
         n_hashes: int, 
         """
-        
-        self.needs_decoder_input = False
         super(Model, self).__init__()
         self.pred_len = configs.pred_len
         self.seq_len = configs.seq_len
@@ -52,12 +50,17 @@ class Model(nn.Module):
         self.projection = nn.Linear(
             configs.d_model, configs.c_out, bias=True)
 
-    def long_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
-        # add placeholder
-        x_enc = torch.cat([x_enc, x_dec[:, -self.pred_len:, :]], dim=1)
+    def long_forecast(self, x_enc, x_mark_enc, x_dec=None, x_mark_dec=None):
+        # If decoder inputs are not provided, create placeholder tensors
+        if x_dec is None:
+            x_dec = torch.zeros_like(x_enc[:, -self.pred_len:, :])
+        if x_mark_dec is None and x_mark_enc is not None:
+            x_mark_dec = torch.zeros_like(x_mark_enc[:, -self.pred_len:, :])
+
+        # Concatenate encoder input with decoder input if applicable
+        x_enc = torch.cat([x_enc, x_dec], dim=1)
         if x_mark_enc is not None:
-            x_mark_enc = torch.cat(
-                [x_mark_enc, x_mark_dec[:, -self.pred_len:, :]], dim=1)
+            x_mark_enc = torch.cat([x_mark_enc, x_mark_dec], dim=1)
 
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
@@ -65,7 +68,6 @@ class Model(nn.Module):
 
         return dec_out  # [B, L, D]
 
-
     def forward(self, x_enc, x_mark_enc):
-        # Since we're doing one-step-ahead forecasting, we don't need decoder inputs
+        # Since we're doing one-step-ahead forecasting, we don't need explicit decoder inputs
         return self.long_forecast(x_enc, x_mark_enc)
