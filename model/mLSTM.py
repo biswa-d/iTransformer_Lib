@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from xlstm.blocks.mlstm.cell_m import mLSTMCell, mLSTMCellConfig
+from xlstm.blocks.mlstm.cell import mLSTMCell, mLSTMCellConfig
 
 class Model(nn.Module):
     def __init__(self, configs):
