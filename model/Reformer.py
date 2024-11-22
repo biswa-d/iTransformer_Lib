@@ -17,6 +17,8 @@ class Model(nn.Module):
         bucket_size: int, 
         n_hashes: int, 
         """
+        
+        self.needs_decoder_input = False
         super(Model, self).__init__()
         self.pred_len = configs.pred_len
         self.seq_len = configs.seq_len

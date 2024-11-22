@@ -147,6 +147,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
+
         # Determine the shape of train_data.data_x properly
         if len(train_data.data_x.shape) == 3:
             num_samples, seq_len, num_features = train_data.data_x.shape
@@ -156,7 +157,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             print(f"Train loader has {len(train_loader)} batches, each with input shape - x: ({num_samples}, {num_features})")
         else:
             print(f"Train loader has {len(train_loader)} batches, but train_data.data_x has an unexpected shape: {train_data.data_x.shape}")
-
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
@@ -179,6 +179,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             self.model.train()
             epoch_time = time.time()
+
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
                 if iter_count == 0:
                     print(f"Batch 0 shape - x: ({batch_x.shape[0]}, {batch_x.shape[1]}, {batch_x.shape[2]}), y: ({batch_y.shape[0]}, {batch_y.shape[1]}, {batch_y.shape[2]})")
@@ -186,24 +187,34 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
-                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data: # Adjust for datasets without marks (e.g., timestamp features)
+
+                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data:
                     batch_x_mark = None
                     batch_y_mark = None
                 else:
                     batch_x_mark = batch_x_mark.float().to(self.device)
                     batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                # Handle decoder input for models that require it
+                if hasattr(self.model, 'needs_decoder_input') and self.model.needs_decoder_input:
+                    dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                    dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                else:
+                    dec_inp = None
 
-                # encoder - decoder
+                # Model forward pass
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                            if dec_inp is not None:
+                                outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                            else:
+                                outputs = self.model(batch_x, batch_x_mark)  # Reformer-style call
                         else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                            if dec_inp is not None:
+                                outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                            else:
+                                outputs = self.model(batch_x, batch_x_mark)
 
                         f_dim = -1 if self.args.features == 'MS' else 0
                         outputs = outputs[:, -self.args.pred_len:, f_dim:]
@@ -212,9 +223,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         train_loss.append(loss.item())
                 else:
                     if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                        if dec_inp is not None:
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                        else:
+                            outputs = self.model(batch_x, batch_x_mark)
                     else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        if dec_inp is not None:
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        else:
+                            outputs = self.model(batch_x, batch_x_mark)
 
                     f_dim = -1 if self.args.features == 'MS' else 0
                     outputs = outputs[:, -self.args.pred_len:, f_dim:]
@@ -255,6 +272,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         self.model.load_state_dict(torch.load(best_model_path))
 
         return self.model
+
 
 
     def test(self, setting, test=0):
