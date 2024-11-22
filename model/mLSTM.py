@@ -11,7 +11,7 @@ class Model(nn.Module):
         self.hidden_size = configs.d_model
         self.num_layers = configs.e_layers
         self.output_size = configs.c_out
-        self.num_heads = configs.num_heads  # Additional for mLSTM
+        self.num_heads = configs.n_heads  # Additional for mLSTM
 
         # Define mLSTM layers
         self.mlstm_cells = nn.ModuleList([
