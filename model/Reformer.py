@@ -64,6 +64,6 @@ class Model(nn.Module):
         return dec_out  # [B, L, D]
 
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
-        dec_out = self.long_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-        return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+    def forward(self, x_enc, x_mark_enc, x_dec=None, x_mark_dec=None, mask=None):
+        # Since we're doing one-step-ahead forecasting, we don't need decoder inputs
+        return self.long_forecast(x_enc, x_mark_enc)
