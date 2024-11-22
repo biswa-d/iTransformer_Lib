@@ -2,14 +2,14 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="iReformer"  # Change model to Reformer for comparison
+MODEL="Reformer"  # Change model to Reformer for comparison
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="itransformer_train.csv"
 TEST_DATA="itransformer_test.csv"
 FEATURES="MS"
 TARGET="Voltage"
-SEQ_LEN=400
+SEQ_LEN=96
 LABEL_LEN=0
 PRED_LEN=1
 ENC_IN=3
