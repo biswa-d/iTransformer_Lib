@@ -259,6 +259,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 preds.append(pred)
                 trues.append(true)
 
+        # Process and save predictions and metrics
         preds = np.array(preds)
         trues = np.array(trues)
         print('test shape:', preds.shape, trues.shape)
@@ -267,22 +268,44 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
 
-        # Save results
+        # Save results folder
         folder_path = './results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
+        # Calculate metrics
         mae, mse, rmse, mape, mspe = metric(preds, trues)
         print(f'mse: {mse}, mae: {mae}')
 
+        # Save metrics to a CSV file
+        metrics_df = pd.DataFrame({
+            'Metric': ['MAE', 'MSE', 'RMSE', 'MAPE', 'MSPE'],
+            'Value': [mae, mse, rmse, mape, mspe]
+        })
+        metrics_csv_path = os.path.join(folder_path, 'metrics.csv')
+        metrics_df.to_csv(metrics_csv_path, index=False)
+
+        # Save predictions and true values to CSV
+        preds_csv_path = os.path.join(folder_path, 'predictions.csv')
+        trues_csv_path = os.path.join(folder_path, 'true_values.csv')
+
+        # Reshape predictions and true values to save in CSV
+        preds_df = pd.DataFrame(preds.reshape(-1, preds.shape[-1]), columns=[f'Pred_{i}' for i in range(preds.shape[-1])])
+        trues_df = pd.DataFrame(trues.reshape(-1, trues.shape[-1]), columns=[f'True_{i}' for i in range(trues.shape[-1])])
+
+        preds_df.to_csv(preds_csv_path, index=False)
+        trues_df.to_csv(trues_csv_path, index=False)
+
+        # Append metrics to the summary text file
         with open("result_long_term_forecast.txt", 'a') as f:
             f.write(f"{setting}\n")
+            f.write(f"Metrics saved to: {metrics_csv_path}\n")
+            f.write(f"Predictions saved to: {preds_csv_path}\n")
+            f.write(f"True values saved to: {trues_csv_path}\n")
             f.write(f'mse: {mse}, mae: {mae}\n\n')
 
-        np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
-        np.save(folder_path + 'pred.npy', preds)
-        np.save(folder_path + 'true.npy', trues)
-
+        print(f"Results saved in folder: {folder_path}")
+        
         return
 
 
