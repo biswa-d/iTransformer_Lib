@@ -2,7 +2,7 @@
 
 # Set hyperparameters for training
 MODEL_ID="custom_model"
-MODEL="Transformer" #test
+MODEL="iTransformer" #test
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="lg_train.csv"
@@ -15,11 +15,11 @@ PRED_LEN=1
 ENC_IN=3
 DEC_IN=3
 C_OUT=1
-D_MODEL=512
-N_HEADS=8
+D_MODEL=128
+N_HEADS=4
 E_LAYERS=2
 D_LAYERS=1
-D_FF=2048
+D_FF=1024
 MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
