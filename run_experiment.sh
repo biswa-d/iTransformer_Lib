@@ -79,5 +79,6 @@ python run.py --is_training 0 \
                --d_layers $D_LAYERS \
                --d_ff $D_FF \
                --moving_avg $MOVING_AVG \
+               --batch_size $BATCH_SIZE \
                --factor $FACTOR \
                --devices $DEVICES
