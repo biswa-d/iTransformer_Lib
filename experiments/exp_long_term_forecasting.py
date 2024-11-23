@@ -3,6 +3,7 @@ from experiments.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 import torch
+import pandas as pd
 import torch.nn as nn
 from torch import optim
 import os
@@ -305,7 +306,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             f.write(f'mse: {mse}, mae: {mae}\n\n')
 
         print(f"Results saved in folder: {folder_path}")
-        
+
         return
 
 
