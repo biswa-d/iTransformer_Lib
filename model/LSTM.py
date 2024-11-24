@@ -10,10 +10,11 @@ class Model(nn.Module):
         self.hidden_size = configs.d_model
         self.num_layers = configs.e_layers
         self.output_size = configs.c_out
+        self.dropout = configs.dropout  # Dropout rate
 
-        # Define LSTM layers
+        # Define LSTM layers with dropout
         self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=self.hidden_size,
-                            num_layers=self.num_layers, batch_first=True)
+                            num_layers=self.num_layers, batch_first=True, dropout=self.dropout)
 
         # Fully connected layer to map hidden states to output
         self.fc = nn.Linear(self.hidden_size, self.output_size)
