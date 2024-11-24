@@ -9,6 +9,7 @@ import os
 import time
 import warnings
 import numpy as np
+import pandas as pd
 
 warnings.filterwarnings('ignore')
 
@@ -273,6 +274,17 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(folder_path + 'pred.npy', preds)
         np.save(folder_path + 'true.npy', trues)
+        # Save predictions and true values as CSV
+        csv_file_path = os.path.join(folder_path, 'results.csv')
+        preds_flat = preds.reshape(-1, preds.shape[-1])
+        trues_flat = trues.reshape(-1, trues.shape[-1])
+        results_df = pd.DataFrame({
+            'Prediction': preds_flat.flatten(),
+            'True': trues_flat.flatten()
+        })
+        results_df.to_csv(csv_file_path, index=False)
+
+        print(f'Results saved to: {csv_file_path}')
 
         return
 
