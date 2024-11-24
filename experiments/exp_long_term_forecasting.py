@@ -3,13 +3,13 @@ from experiments.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 import torch
+import pandas as pd
 import torch.nn as nn
 from torch import optim
 import os
 import time
 import warnings
 import numpy as np
-import pandas as pd
 
 warnings.filterwarnings('ignore')
 
@@ -44,7 +44,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(vali_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
-                if 'PEMS' in self.args.data or 'Solar' in self.args.data:
+                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data:
                     batch_x_mark = None
                     batch_y_mark = None
                 else:
@@ -83,7 +83,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
-        test_data, test_loader = self._get_data(flag='test')
+        # Determine the shape of train_data.data_x properly
+        if len(train_data.data_x.shape) == 3:
+            num_samples, seq_len, num_features = train_data.data_x.shape
+            print(f"Train loader has {len(train_loader)} batches, each with input shape - x: ({num_samples}, {seq_len}, {num_features})")
+        elif len(train_data.data_x.shape) == 2:
+            num_samples, num_features = train_data.data_x.shape
+            print(f"Train loader has {len(train_loader)} batches, each with input shape - x: ({num_samples}, {num_features})")
+        else:
+            print(f"Train loader has {len(train_loader)} batches, but train_data.data_x has an unexpected shape: {train_data.data_x.shape}")
+
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
@@ -107,11 +116,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             self.model.train()
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
+                if iter_count == 0:
+                    print(f"Batch 0 shape - x: ({batch_x.shape[0]}, {batch_x.shape[1]}, {batch_x.shape[2]}), y: ({batch_y.shape[0]}, {batch_y.shape[1]}, {batch_y.shape[2]})")
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
-                if 'PEMS' in self.args.data or 'Solar' in self.args.data:
+                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data: # Adjust for datasets without marks (e.g., timestamp features)
                     batch_x_mark = None
                     batch_y_mark = None
                 else:
@@ -166,7 +177,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
-            # test_loss = self.vali(test_data, test_loader, criterion)
 
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss))
@@ -177,15 +187,20 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             adjust_learning_rate(model_optim, epoch + 1, self.args)
 
-            # get_cka(self.args, setting, self.model, train_loader, self.device, epoch)
-
         best_model_path = path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
         return self.model
 
+
     def test(self, setting, test=0):
-        test_data, test_loader = self._get_data(flag='test')
+        # Ensure the test data loader uses a separate dataset file
+        test_data, test_loader = self._get_data(flag='test')  # Test data should now point to a dedicated test file
+        for batch_x, batch_y, _, _ in test_loader:
+            batch_size, seq_len, num_features = batch_x.shape
+            pred_len, output_dim = batch_y.shape[1], batch_y.shape[2] if len(batch_y.shape) > 2 else 1
+            print(f"Test loader has {len(test_loader)} batches. Batch input shape - x: ({batch_size}, {seq_len}, {num_features}), y: ({batch_size}, {pred_len}, {output_dim})")
+            break  # Print once, then break since shape is consistent across batches
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
@@ -202,17 +217,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
 
-                if 'PEMS' in self.args.data or 'Solar' in self.args.data:
+                # Update for datasets without marks
+                if 'PEMS' in self.args.data or 'Solar' in self.args.data or 'custom' in self.args.data:
                     batch_x_mark = None
                     batch_y_mark = None
                 else:
                     batch_x_mark = batch_x_mark.float().to(self.device)
                     batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # decoder input
+                # Decoder input preparation
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                # encoder - decoder
+
+                # Prediction logic
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if self.args.output_attention:
@@ -222,15 +239,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 else:
                     if self.args.output_attention:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+
 
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
+
                 if test_data.scale and self.args.inverse:
                     shape = outputs.shape
                     outputs = test_data.inverse_transform(outputs.squeeze(0)).reshape(shape)
@@ -241,52 +259,56 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 preds.append(pred)
                 trues.append(true)
-                if i % 20 == 0:
-                    input = batch_x.detach().cpu().numpy()
-                    if test_data.scale and self.args.inverse:
-                        shape = input.shape
-                        input = test_data.inverse_transform(input.squeeze(0)).reshape(shape)
-                    gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
-                    pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
-                    visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
 
+        # Process and save predictions and metrics
         preds = np.array(preds)
         trues = np.array(trues)
         print('test shape:', preds.shape, trues.shape)
+
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
 
-        # result save
+        # Save results folder
         folder_path = './results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
+        # Calculate metrics
         mae, mse, rmse, mape, mspe = metric(preds, trues)
-        print('mse:{}, mae:{}'.format(mse, mae))
-        f = open("result_long_term_forecast.txt", 'a')
-        f.write(setting + "  \n")
-        f.write('mse:{}, mae:{}'.format(mse, mae))
-        f.write('\n')
-        f.write('\n')
-        f.close()
+        print(f'mse: {mse}, mae: {mae}')
 
-        np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
-        np.save(folder_path + 'pred.npy', preds)
-        np.save(folder_path + 'true.npy', trues)
-        # Save predictions and true values as CSV
-        csv_file_path = os.path.join(folder_path, 'results.csv')
-        preds_flat = preds.reshape(-1, preds.shape[-1])
-        trues_flat = trues.reshape(-1, trues.shape[-1])
-        results_df = pd.DataFrame({
-            'Prediction': preds_flat.flatten(),
-            'True': trues_flat.flatten()
+        # Save metrics to a CSV file
+        metrics_df = pd.DataFrame({
+            'Metric': ['MAE', 'MSE', 'RMSE', 'MAPE', 'MSPE'],
+            'Value': [mae, mse, rmse, mape, mspe]
         })
-        results_df.to_csv(csv_file_path, index=False)
+        metrics_csv_path = os.path.join(folder_path, 'metrics.csv')
+        metrics_df.to_csv(metrics_csv_path, index=False)
 
-        print(f'Results saved to: {csv_file_path}')
+        # Save predictions and true values to CSV
+        preds_csv_path = os.path.join(folder_path, 'predictions.csv')
+        trues_csv_path = os.path.join(folder_path, 'true_values.csv')
+
+        # Reshape predictions and true values to save in CSV
+        preds_df = pd.DataFrame(preds.reshape(-1, preds.shape[-1]), columns=[f'Pred_{i}' for i in range(preds.shape[-1])])
+        trues_df = pd.DataFrame(trues.reshape(-1, trues.shape[-1]), columns=[f'True_{i}' for i in range(trues.shape[-1])])
+
+        preds_df.to_csv(preds_csv_path, index=False)
+        trues_df.to_csv(trues_csv_path, index=False)
+
+        # Append metrics to the summary text file
+        with open("result_long_term_forecast.txt", 'a') as f:
+            f.write(f"{setting}\n")
+            f.write(f"Metrics saved to: {metrics_csv_path}\n")
+            f.write(f"Predictions saved to: {preds_csv_path}\n")
+            f.write(f"True values saved to: {trues_csv_path}\n")
+            f.write(f'mse: {mse}, mae: {mae}\n\n')
+
+        print(f"Results saved in folder: {folder_path}")
 
         return
+
 
 
     def predict(self, setting, load=False):
