@@ -27,6 +27,7 @@ TRAIN_EPOCHS=5000
 BATCH_SIZE=400
 PATIENCE=100
 LEARNING_RATE=0.001
+DROPOUT=0.2
 
 # Train the model
 echo "Starting training on GPUs $DEVICES..."
@@ -55,7 +56,8 @@ python run.py --is_training 1 \
                --train_epochs $TRAIN_EPOCHS \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
-               --learning_rate $LEARNING_RATE
+               --learning_rate $LEARNING_RATE \
+                --dropout $DROPOUT
 
 # Test the model
 echo "Starting testing on GPUs $DEVICES..."
@@ -64,7 +66,7 @@ python run.py --is_training 0 \
                --model $MODEL \
                --data $DATA \
                --root_path $ROOT_PATH \
-               --data_path $TEST_DATA \
+               --data_path $TRAIN_DATA \
                --features $FEATURES \
                --target $TARGET \
                --seq_len $SEQ_LEN \
@@ -79,6 +81,10 @@ python run.py --is_training 0 \
                --d_layers $D_LAYERS \
                --d_ff $D_FF \
                --moving_avg $MOVING_AVG \
-               --batch_size $BATCH_SIZE \
                --factor $FACTOR \
-               --devices $DEVICES
+               --devices $DEVICES \
+               --train_epochs $TRAIN_EPOCHS \
+               --batch_size $BATCH_SIZE \
+               --patience $PATIENCE \
+               --learning_rate $LEARNING_RATE \
+                --dropout $DROPOUT
