@@ -243,10 +243,25 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_y = batch_y.detach().cpu().numpy()
                 print('test shape:', outputs.shape, batch_y.shape)
                 print('test shape:', outputs.shape, batch_y.shape)
-                if test_data.scale and self.args.inverse: 
+                if test_data.scale and self.args.inverse:
                     shape = outputs.shape
+                    print("Shape of outputs before inverse transform:", shape)
+
+                    # Flatten the 3D arrays to 2D for inverse transformation
+                    if outputs.ndim > 2:  # Only reshape if the data is 3D
+                        outputs = outputs.reshape(-1, outputs.shape[-1])  # Flatten the array
+                        batch_y = batch_y.reshape(-1, batch_y.shape[-1])  # Flatten the array
+
+                    # Apply inverse transform
                     outputs = test_data.inverse_transform(outputs)
                     batch_y = test_data.inverse_transform(batch_y)
+
+                    # Reshape back to the original 3D shape
+                    outputs = outputs.reshape(shape)
+                    batch_y = batch_y.reshape(shape)
+
+                    print("Shape of outputs after inverse transform:", outputs.shape)
+
 
                 pred = outputs
                 true = batch_y
