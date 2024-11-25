@@ -247,27 +247,34 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     shape = outputs.shape
                     print("Shape of outputs before inverse transform:", shape)
 
-                    # Flatten the 3D arrays to 2D for inverse transformation
-                    if outputs.ndim > 2:  # Only reshape if the data is 3D
-                        outputs = outputs.reshape(-1, outputs.shape[-1])  # Flatten the array
-                        batch_y = batch_y.reshape(-1, batch_y.shape[-1])  # Flatten the array
+                    # Prepare for inverse scaling
+                    outputs_reshaped = outputs.reshape(-1, outputs.shape[-1])  # Flatten outputs
+                    batch_y_reshaped = batch_y.reshape(-1, batch_y.shape[-1])  # Flatten batch_y
+                    x_batch_reshaped = batch_x.detach().cpu().numpy().reshape(-1, batch_x.shape[-1])  # Flatten x_batch
 
-                    # Apply inverse transform
-                    outputs = test_data.inverse_transform(outputs)
-                    batch_y = test_data.inverse_transform(batch_y)
+                    # Concatenate for inverse scaling
+                    pred_with_input = np.concatenate((x_batch_reshaped, outputs_reshaped), axis=-1)
+                    true_with_input = np.concatenate((x_batch_reshaped, batch_y_reshaped), axis=-1)
 
-                    # Reshape back to the original 3D shape
-                    outputs = outputs.reshape(shape)
-                    batch_y = batch_y.reshape(shape)
+                    # Inverse scale both concatenated arrays
+                    rescaled_pred_with_input = test_data.inverse_transform(pred_with_input)
+                    rescaled_true_with_input = test_data.inverse_transform(true_with_input)
 
-                    print("Shape of outputs after inverse transform:", outputs.shape)
+                    # Extract rescaled predictions and true labels
+                    rescaled_pred = rescaled_pred_with_input[:, -outputs.shape[-1]:].reshape(shape)  # Only predictions
+                    rescaled_true = rescaled_true_with_input[:, -batch_y.shape[-1]:].reshape(shape)  # Only true labels
 
+                    print("Shape of rescaled predictions:", rescaled_pred.shape)
+                    print("Shape of rescaled true labels:", rescaled_true.shape)
 
-                pred = outputs
-                true = batch_y
+                # Update predictions and true values for metrics
+                pred = rescaled_pred
+                true = rescaled_true
 
+                # Append to the results
                 preds.append(pred)
                 trues.append(true)
+
                 # if i % 20 == 0:
                 #     input = batch_x.detach().cpu().numpy()
                 #     if test_data.scale and self.args.inverse:
