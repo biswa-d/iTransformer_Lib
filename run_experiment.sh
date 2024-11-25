@@ -28,7 +28,7 @@ BATCH_SIZE=400
 PATIENCE=100
 LEARNING_RATE=0.001
 DROPOUT=0.2
-INVERSE=True
+
 
 # Train the model
 echo "Starting training on GPUs $DEVICES..."
@@ -59,7 +59,7 @@ python run.py --is_training 1 \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
                --dropout $DROPOUT \
-               --inverse $INVERSE
+               --inverse
 
 # Test the model
 echo "Starting testing on GPUs $DEVICES..."
@@ -90,4 +90,4 @@ python run.py --is_training 0 \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
                --dropout $DROPOUT \
-               --inverse $INVERSE
+               --inverse
