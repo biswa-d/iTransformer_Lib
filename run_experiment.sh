@@ -23,11 +23,12 @@ D_FF=1024
 MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
-TRAIN_EPOCHS=5000
+TRAIN_EPOCHS=1
 BATCH_SIZE=400
 PATIENCE=100
 LEARNING_RATE=0.001
 DROPOUT=0.2
+INVERSE=True
 
 # Train the model
 echo "Starting training on GPUs $DEVICES..."
@@ -57,7 +58,8 @@ python run.py --is_training 1 \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
-                --dropout $DROPOUT
+               --dropout $DROPOUT \
+               --inverse $INVERSE
 
 # Test the model
 echo "Starting testing on GPUs $DEVICES..."
@@ -87,4 +89,5 @@ python run.py --is_training 0 \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
-                --dropout $DROPOUT
+               --dropout $DROPOUT \
+               --inverse $INVERSE
