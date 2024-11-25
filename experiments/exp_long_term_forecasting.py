@@ -188,16 +188,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0, test_file=None):
+    def test(self, setting, test=0):
         # Set the test file dynamically
-        if test_file:
-            self.args.data_path = test_file  # Update data_path for testing
-            print(f"Testing with custom test file: {self.args.data_path}")
-        else:
+        test_file = self.args.data_path
+        if not test_file:
             raise ValueError("Custom test file is required for testing.")
-        
-        # Load test data
-        test_data, test_loader = self._get_data(flag='test', test_file=self.args.data_path)
+
+        print(f"Testing with custom test file: {test_file}")
+        test_data, test_loader = self._get_data(flag='test', test_file=test_file)
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
