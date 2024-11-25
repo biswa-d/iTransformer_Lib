@@ -244,25 +244,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 print('test shape:', outputs.shape, batch_y.shape)
                 print('test shape:', outputs.shape, batch_y.shape)
                 if test_data.scale and self.args.inverse:
-                    shape = outputs.shape
-                    print("Shape of outputs before inverse transform:", shape)
+                    # Fetch mean and std for the output column
+                    output_col_index = -1  # Assuming the last column corresponds to the prediction
+                    output_mean = test_data.scaler.mean_[output_col_index]
+                    output_std = test_data.scaler.scale_[output_col_index]
 
-                    # Prepare for inverse scaling
-                    outputs_reshaped = outputs.reshape(-1, outputs.shape[-1])  # Flatten outputs
-                    batch_y_reshaped = batch_y.reshape(-1, batch_y.shape[-1])  # Flatten batch_y
-                    x_batch_reshaped = batch_x.detach().cpu().numpy().reshape(-1, batch_x.shape[-1])  # Flatten x_batch
-
-                    # Concatenate for inverse scaling
-                    pred_with_input = np.concatenate((x_batch_reshaped, outputs_reshaped), axis=-1)
-                    true_with_input = np.concatenate((x_batch_reshaped, batch_y_reshaped), axis=-1)
-
-                    # Inverse scale both concatenated arrays
-                    rescaled_pred_with_input = test_data.inverse_transform(pred_with_input)
-                    rescaled_true_with_input = test_data.inverse_transform(true_with_input)
-
-                    # Extract rescaled predictions and true labels
-                    rescaled_pred = rescaled_pred_with_input[:, -outputs.shape[-1]:].reshape(shape)  # Only predictions
-                    rescaled_true = rescaled_true_with_input[:, -batch_y.shape[-1]:].reshape(shape)  # Only true labels
+                    # Rescale predictions
+                    rescaled_pred = (outputs * output_std) + output_mean
+                    rescaled_true = (batch_y * output_std) + output_mean
 
                     print("Shape of rescaled predictions:", rescaled_pred.shape)
                     print("Shape of rescaled true labels:", rescaled_true.shape)
