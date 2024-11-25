@@ -250,62 +250,70 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_y = batch_y.detach().cpu().numpy()
 
                 if test_data.scale and self.args.inverse:
-                    shape = outputs.shape
-                    outputs = test_data.inverse_transform(outputs.squeeze(0)).reshape(shape)
-                    batch_y = test_data.inverse_transform(batch_y.squeeze(0)).reshape(shape)
+                    # Fetch mean and std for the output column
+                    output_col_index = -1  # Assuming the last column corresponds to the prediction
+                    output_mean = test_data.scaler.mean_[output_col_index]
+                    output_std = test_data.scaler.scale_[output_col_index]
 
-                pred = outputs
-                true = batch_y
+                    # Rescale predictions
+                    rescaled_pred = (outputs * output_std) + output_mean
+                    rescaled_true = (batch_y * output_std) + output_mean
 
+                    # print("Shape of rescaled predictions:", rescaled_pred.shape)
+                    # print("Shape of rescaled true labels:", rescaled_true.shape)
+
+                # Update predictions and true values for metrics
+                pred = rescaled_pred
+                true = rescaled_true
+
+                # Append to the results
                 preds.append(pred)
                 trues.append(true)
 
-        # Process and save predictions and metrics
+                # if i % 20 == 0:
+                #     input = batch_x.detach().cpu().numpy()
+                #     if test_data.scale and self.args.inverse:
+                #         shape = input.shape
+                #         input = test_data.inverse_transform(input.squeeze(0)).reshape(shape)
+                #     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
+                #     pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
+                #     visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
+
         preds = np.array(preds)
         trues = np.array(trues)
         print('test shape:', preds.shape, trues.shape)
-
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
 
-        # Save results folder
+        # result save
         folder_path = './results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        # Calculate metrics
         mae, mse, rmse, mape, mspe = metric(preds, trues)
-        print(f'mse: {mse}, mae: {mae}')
+        print('mse:{}, mae:{}'.format(mse, mae))
+        f = open("result_long_term_forecast.txt", 'a')
+        f.write(setting + "  \n")
+        f.write('mse:{}, mae:{}'.format(mse, mae))
+        f.write('\n')
+        f.write('\n')
+        f.close()
 
-        # Save metrics to a CSV file
-        metrics_df = pd.DataFrame({
-            'Metric': ['MAE', 'MSE', 'RMSE', 'MAPE', 'MSPE'],
-            'Value': [mae, mse, rmse, mape, mspe]
+        np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
+        np.save(folder_path + 'pred.npy', preds)
+        np.save(folder_path + 'true.npy', trues)
+        # Save predictions and true values as CSV
+        csv_file_path = os.path.join(folder_path, 'results.csv')
+        preds_flat = preds.reshape(-1, preds.shape[-1])
+        trues_flat = trues.reshape(-1, trues.shape[-1])
+        results_df = pd.DataFrame({
+            'Prediction': preds_flat.flatten(),
+            'True': trues_flat.flatten()
         })
-        metrics_csv_path = os.path.join(folder_path, 'metrics.csv')
-        metrics_df.to_csv(metrics_csv_path, index=False)
+        results_df.to_csv(csv_file_path, index=False)
 
-        # Save predictions and true values to CSV
-        preds_csv_path = os.path.join(folder_path, 'predictions.csv')
-        trues_csv_path = os.path.join(folder_path, 'true_values.csv')
-
-        # Reshape predictions and true values to save in CSV
-        preds_df = pd.DataFrame(preds.reshape(-1, preds.shape[-1]), columns=[f'Pred_{i}' for i in range(preds.shape[-1])])
-        trues_df = pd.DataFrame(trues.reshape(-1, trues.shape[-1]), columns=[f'True_{i}' for i in range(trues.shape[-1])])
-
-        preds_df.to_csv(preds_csv_path, index=False)
-        trues_df.to_csv(trues_csv_path, index=False)
-
-        # Append metrics to the summary text file
-        with open("result_long_term_forecast.txt", 'a') as f:
-            f.write(f"{setting}\n")
-            f.write(f"Metrics saved to: {metrics_csv_path}\n")
-            f.write(f"Predictions saved to: {preds_csv_path}\n")
-            f.write(f"True values saved to: {trues_csv_path}\n")
-            f.write(f'mse: {mse}, mae: {mae}\n\n')
-
-        print(f"Results saved in folder: {folder_path}")
+        print(f'Results saved to: {csv_file_path}')
 
         return
 
