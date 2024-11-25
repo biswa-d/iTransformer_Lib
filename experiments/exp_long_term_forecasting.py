@@ -25,7 +25,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
 
-    def _get_data(self, flag):
+    def _get_data(self, flag, test_file=None):
+        # Override data_path for the 'test' flag if test_file is provided
+        if flag == 'test' and test_file:
+            self.args.data_path = test_file  # Use the provided test file path
+
+        # Call the data_provider with updated args
         data_set, data_loader = data_provider(self.args, flag)
         return data_set, data_loader
 
@@ -83,7 +88,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
-        test_data, test_loader = self._get_data(flag='test')
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
@@ -184,8 +188,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0):
-        test_data, test_loader = self._get_data(flag='test')
+    def test(self, setting, test=0, test_file=None):
+        # Set the test file dynamically
+        if test_file:
+            self.args.data_path = test_file  # Update data_path for testing
+            print(f"Testing with custom test file: {self.args.data_path}")
+        else:
+            raise ValueError("Custom test file is required for testing.")
+        
+        # Load test data
+        test_data, test_loader = self._get_data(flag='test', test_file=self.args.data_path)
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
@@ -238,6 +250,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 pred = outputs
                 true = batch_y
+                if test_data.scale and self.args.inverse:
+                    shape = outputs.shape
+                    outputs = test_data.inverse_transform(outputs.reshape(-1, outputs.shape[-1])).reshape(shape)
+                    batch_y = test_data.inverse_transform(batch_y.reshape(-1, batch_y.shape[-1])).reshape(shape)
 
                 preds.append(pred)
                 trues.append(true)
