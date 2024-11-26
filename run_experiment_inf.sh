@@ -19,7 +19,7 @@ D_MODEL=128
 N_HEADS=4
 E_LAYERS=2
 D_LAYERS=1
-D_FF=2048
+D_FF=128
 MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
@@ -74,7 +74,7 @@ python run.py --is_training 0 \
                --label_len $LABEL_LEN \
                --pred_len $PRED_LEN \
                --enc_in $ENC_IN \
-	       --dropout $DROPOUT\
+	           --dropout $DROPOUT\
                --dec_in $DEC_IN \
                --c_out $C_OUT \
                --d_model $D_MODEL \
@@ -89,4 +89,4 @@ python run.py --is_training 0 \
                --batch_size $BATCH_SIZE \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
-	       --inverse
+	           --inverse
