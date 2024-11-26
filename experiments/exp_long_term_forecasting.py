@@ -287,12 +287,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         mae, mse, rmse, mape, mspe = metric(preds, trues)
         print('mse:{}, mae:{}'.format(mse, mae))
-        f = open("result_long_term_forecast.txt", 'a')
-        f.write(setting + "  \n")
-        f.write('mse:{}, mae:{}'.format(mse, mae))
-        f.write('\n')
-        f.write('\n')
-        f.close()
+        # Calculate the number of trainable parameters
+        num_parameters = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        print(f"Number of model parameters: {num_parameters}")
+
+        # Append metrics and model parameters to the results file
+        with open("result_long_term_forecast.txt", 'a') as f:
+            f.write(setting + "  \n")
+            f.write(f'mse:{mse}, mae:{mae}, rmse:{rmse}, mspe: {mspe}, parameters:{num_parameters}\n')
+            f.write('\n')
 
         np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(folder_path + 'pred.npy', preds)
