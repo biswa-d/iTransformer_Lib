@@ -283,9 +283,9 @@ class AttentionLayer(nn.Module):
         _, S, _ = keys.shape
         H = self.n_heads
 
-        print(f"Before projection: {queries.shape}")
+        # print(f"Before projection: {queries.shape}")
         queries = self.query_projection(queries).view(B, L, H, -1)
-        print(f"After query projection: {queries.shape}")
+        # print(f"After query projection: {queries.shape}")
         keys = self.key_projection(keys).view(B, S, H, -1)
         values = self.value_projection(values).view(B, S, H, -1)
 
