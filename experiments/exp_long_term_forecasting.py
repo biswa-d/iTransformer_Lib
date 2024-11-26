@@ -241,8 +241,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
-                print('test shape:', outputs.shape, batch_y.shape)
-                print('test shape:', outputs.shape, batch_y.shape)
+                # print('test shape:', outputs.shape, batch_y.shape)
+                # print('test shape:', outputs.shape, batch_y.shape)
                 if test_data.scale and self.args.inverse:
                     # Fetch mean and std for the output column
                     output_col_index = -1  # Assuming the last column corresponds to the prediction
