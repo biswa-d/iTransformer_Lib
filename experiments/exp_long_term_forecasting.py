@@ -261,10 +261,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                     # print("Shape of rescaled predictions:", rescaled_pred.shape)
                     # print("Shape of rescaled true labels:", rescaled_true.shape)
+                    outputs = rescaled_pred
+                    batch_y = rescaled_true
 
                 # Update predictions and true values for metrics
-                pred = rescaled_pred
-                true = rescaled_true
+                pred = outputs
+                true = batch_y
 
                 # Append to the results
                 preds.append(pred)
