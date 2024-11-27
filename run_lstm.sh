@@ -66,7 +66,7 @@ python run.py --is_training 0 \
                --model $MODEL \
                --data $DATA \
                --root_path $ROOT_PATH \
-               --data_path $TRAIN_DATA \
+               --data_path $TEST_DATA \
                --features $FEATURES \
                --target $TARGET \
                --seq_len $SEQ_LEN \
