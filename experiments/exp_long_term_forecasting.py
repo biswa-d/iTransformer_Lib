@@ -245,8 +245,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 if test_data.scale and self.args.inverse: 
                     shape = outputs.shape
-                    outputs = test_data.inverse_transform(outputs.squeeze(0)).reshape(shape)
-                    batch_y = test_data.inverse_transform(batch_y.squeeze(0)).reshape(shape)
+                    outputs = test_data.inverse_transform(outputs).reshape(shape)
+                    batch_y = test_data.inverse_transform(batch_y).reshape(shape)
 
                 pred = outputs
                 true = batch_y
