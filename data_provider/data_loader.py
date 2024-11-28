@@ -227,7 +227,7 @@ class Dataset_Custom(Dataset):
         df_raw = df_raw[['date'] + cols + [self.target]]
 
         # Train and validation splits
-        num_train = int(len(df_raw) * 0.7)
+        num_train = int(len(df_raw) * 0.8)
         num_vali = len(df_raw) - num_train
         border1s = [0, num_train - self.seq_len]  # Train and validation
         border2s = [num_train, len(df_raw)]       # Train and validation
