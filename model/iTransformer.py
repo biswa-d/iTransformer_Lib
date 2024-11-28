@@ -27,10 +27,10 @@ class Model(nn.Module):
             [
                 EncoderLayer(
                     AttentionLayer(
-                        FullAttention(False, configs.factor, attention_dropout=configs.dropout,
+                        FullAttention(False, configs.factor, attention_dropout=configs.dropout*0.8,
                                       output_attention=configs.output_attention), configs.d_model, configs.n_heads),
                     configs.d_model,
-                    configs.d_ff,
+                    d_ff=int(configs.d_ff * 1.5),
                     dropout=configs.dropout,
                     activation=configs.activation
                 ) for l in range(configs.e_layers)
