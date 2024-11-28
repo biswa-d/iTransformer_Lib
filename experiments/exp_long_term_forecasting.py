@@ -252,7 +252,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                     # Rescale predictions and true values
                     rescaled_pred = (outputs * output_std) + output_mean
-                    rescaled_true = batch_y
+                    rescaled_true = (batch_y * output_std) + output_mean
 
                     # Smoothing: Apply Savitzky-Golay filter to smooth predictions
                     rescaled_pred = savgol_filter(rescaled_pred, window_length=9, polyorder=3, axis=0)
