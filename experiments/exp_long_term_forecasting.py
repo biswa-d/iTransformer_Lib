@@ -197,6 +197,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         print(f"Testing with custom test file: {test_file}")
         test_data, test_loader = self._get_data(flag='test', test_file=test_file)
+        print(f"Test loader shape: {len(test_loader)}")
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
