@@ -252,8 +252,10 @@ class Dataset_Custom(Dataset):
             train_data = df_data[border1s[0]:border2s[0]]
             self.scaler.fit(train_data.values)
             data = self.scaler.transform(df_data.values)
+            print("Data scaled")
         else:
             data = df_data.values
+            print("Data not scaled")
 
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
