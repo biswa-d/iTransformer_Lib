@@ -269,10 +269,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print('test shape:', preds.shape, trues.shape)
 
         # Apply smoothing filter to the entire prediction array
-        smoothed_preds = savgol_filter(preds, window_length=9, polyorder=3, axis=0)
+        #smoothed_preds = savgol_filter(preds, window_length=9, polyorder=3, axis=0)
 
         # Clipping the predictions to stay within [0, 1] (optional)
-        smoothed_preds = np.clip(smoothed_preds, 0, 1)
+        smoothed_preds = np.clip(preds, 0, 1)
 
         # Save smoothed predictions
         np.save(folder_path + 'smoothed_pred.npy', smoothed_preds)
