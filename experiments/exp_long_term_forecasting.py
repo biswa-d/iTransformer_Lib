@@ -10,6 +10,7 @@ import time
 import warnings
 import numpy as np
 import pandas as pd
+from scipy.signal import savgol_filter
 
 warnings.filterwarnings('ignore')
 
@@ -241,37 +242,32 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
-                # print('test shape:', outputs.shape, batch_y.shape)
-                # print('test shape:', outputs.shape, batch_y.shape)
+
+                # Check if rescaling is needed
                 if test_data.scale and self.args.inverse:
                     # Fetch mean and std for the output column
                     output_col_index = -1  # Assuming the last column corresponds to the prediction
                     output_mean = test_data.scaler.mean_[output_col_index]
                     output_std = test_data.scaler.scale_[output_col_index]
 
-                    # Rescale predictions
+                    # Rescale predictions and true values
                     rescaled_pred = (outputs * output_std) + output_mean
                     rescaled_true = (batch_y * output_std) + output_mean
 
-                    # print("Shape of rescaled predictions:", rescaled_pred.shape)
-                    # print("Shape of rescaled true labels:", rescaled_true.shape)
+                    # Smoothing: Apply Savitzky-Golay filter to smooth predictions
+                    rescaled_pred = savgol_filter(rescaled_pred, window_length=9, polyorder=3, axis=1)
 
-                # Update predictions and true values for metrics
-                pred = rescaled_pred
-                true = rescaled_true
+                    # Clipping: Define dynamic bounds and clip predictions
+                    lower_bound = output_mean - 3 * output_std
+                    upper_bound = output_mean + 3 * output_std
+                    rescaled_pred = np.clip(rescaled_pred, lower_bound, upper_bound)
 
-                # Append to the results
-                preds.append(pred)
-                trues.append(true)
-
-                # if i % 20 == 0:
-                #     input = batch_x.detach().cpu().numpy()
-                #     if test_data.scale and self.args.inverse:
-                #         shape = input.shape
-                #         input = test_data.inverse_transform(input.squeeze(0)).reshape(shape)
-                #     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
-                #     pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
-                #     visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
+                    # Assign rescaled predictions and true values for further processing
+                    preds = rescaled_pred
+                    trues = rescaled_true
+                else:
+                    preds = outputs
+                    trues = batch_y
 
         preds = np.array(preds)
         trues = np.array(trues)
