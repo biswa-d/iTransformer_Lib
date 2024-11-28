@@ -243,16 +243,31 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
 
-                if test_data.scale and self.args.inverse: 
-                    shape = outputs.shape
-                    outputs = test_data.inverse_transform(outputs).reshape(shape)
-                    batch_y = test_data.inverse_transform(batch_y).reshape(shape)
+                # Check if rescaling is needed
+                if test_data.scale and self.args.inverse:
+                    # Fetch mean and std for the output column
+                    output_col_index = -1  # Assuming the last column corresponds to the prediction
+                    output_mean = test_data.scaler.mean_[output_col_index]
+                    output_std = test_data.scaler.scale_[output_col_index]
 
-                pred = outputs
-                true = batch_y
+                    # Rescale predictions and true values
+                    rescaled_pred = (outputs * output_std) + output_mean
+                    rescaled_true = batch_y
 
-                preds.append(pred)
-                trues.append(true)
+                    # Smoothing: Apply Savitzky-Golay filter to smooth predictions
+                    rescaled_pred = savgol_filter(rescaled_pred, window_length=9, polyorder=3, axis=0)
+
+                    # Clipping: Define dynamic bounds and clip predictions
+                    lower_bound = output_mean - 3 * output_std
+                    upper_bound = output_mean + 3 * output_std
+                    #rescaled_pred = np.clip(rescaled_pred, lower_bound, upper_bound)
+
+                    # Assign rescaled predictions and true values for further processing
+                    preds = rescaled_pred
+                    trues = rescaled_true
+                else:
+                    preds = outputs
+                    trues = batch_y
 
         preds = np.array(preds)
         trues = np.array(trues)
