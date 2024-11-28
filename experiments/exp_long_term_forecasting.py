@@ -268,13 +268,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
 
-        # result save
-        folder_path = './results/' + setting + '/'
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
+        # Apply smoothing filter to the entire prediction array
+        smoothed_preds = savgol_filter(preds, window_length=9, polyorder=3, axis=0)
 
-        mae, mse, rmse, mape, mspe = metric(preds, trues)
-        print('mse:{}, mae:{}'.format(mse, mae))
+        # Clipping the predictions to stay within [0, 1] (optional)
+        smoothed_preds = np.clip(smoothed_preds, 0, 1)
+
+        # Save smoothed predictions
+        np.save(folder_path + 'smoothed_pred.npy', smoothed_preds)
+
+        # Evaluate metrics using smoothed predictions
+        mae, mse, rmse, mape, mspe = metric(smoothed_preds, trues)
+        print('With Smoothing - mse:{}, mae:{}'.format(mse, mae))
+
         # Calculate the number of trainable parameters
         num_parameters = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f"Number of model parameters: {num_parameters}")
@@ -286,11 +292,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             f.write('\n')
 
         np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
-        np.save(folder_path + 'pred.npy', preds)
+        np.save(folder_path + 'pred.npy', preds)  # Save original predictions
         np.save(folder_path + 'true.npy', trues)
-        # Save predictions and true values as CSV
-        csv_file_path = os.path.join(folder_path, 'results.csv')
-        preds_flat = preds.reshape(-1, preds.shape[-1])
+
+        # Save smoothed predictions and true values to CSV
+        csv_file_path = os.path.join(folder_path, 'results_smoothed.csv')
+        preds_flat = smoothed_preds.reshape(-1, smoothed_preds.shape[-1])
         trues_flat = trues.reshape(-1, trues.shape[-1])
         results_df = pd.DataFrame({
             'Prediction': preds_flat.flatten(),
