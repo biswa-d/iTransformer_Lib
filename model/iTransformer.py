@@ -5,6 +5,7 @@ from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding_inverted
 import numpy as np
+import scipy.signal as signal
 
 
 class Model(nn.Module):
@@ -62,14 +63,20 @@ class Model(nn.Module):
 
         # B N E -> B N S -> B S N 
         dec_out = self.projector(enc_out).permute(0, 2, 1)[:, :, :N] # filter the covariates
+        # Check for out-of-bound predictions
+        if torch.any(dec_out < 0) or torch.any(dec_out > 1):
+            print(f"WARNING: Normalized predictions out of bounds! Min: {dec_out.min().item()}, Max: {dec_out.max().item()}")
+
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
+        # Check for out-of-bound predictions after denormalization
+        if torch.any(dec_out < 0) or torch.any(dec_out > 1):  # Replace 0, 1 with actual min, max if denormalized
+            print(f"WARNING: Denormalized predictions out of bounds! Min: {dec_out.min().item()}, Max: {dec_out.max().item()}")
 
         return dec_out
-
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
