@@ -82,15 +82,6 @@ class Model(nn.Module):
         )
         self.projector = nn.Sequential(
             nn.Linear(configs.d_model, 5, bias=True),  # Project to 5 steps (since pred_len is 1)
-            nn.ReLU(),
-            PermuteLayer(0, 2, 1),  # Rearrange to (B, 5, N) for Conv1d
-            nn.Conv1d(
-                in_channels=5,
-                out_channels=1,  # Reduce to 1 channel
-                kernel_size=3,  # Apply smoothing over 3 steps
-                padding=1  # Maintain the length
-            ),
-            nn.AvgPool1d(kernel_size=5, stride=1),  # Pool across 5 steps
             ProbabilityAwareActivation(decay_rate=5.0)  # Constrain output to [0, 1]
         )
 
