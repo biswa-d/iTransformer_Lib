@@ -8,6 +8,35 @@ import numpy as np
 import scipy.signal as signal
 
 
+class BoundaryAwareActivation(nn.Module):
+    def __init__(self, boundary_scale=10.0):
+        """
+        Custom boundary-aware activation function.
+        Args:
+            boundary_scale (float): Controls the strength of the pull towards 0 and 1.
+        """
+        super(BoundaryAwareActivation, self).__init__()
+        self.boundary_scale = boundary_scale
+
+    def forward(self, x):
+        """
+        Apply the boundary-aware activation function.
+        Args:
+            x (Tensor): Input tensor.
+        Returns:
+            Tensor: Activated tensor with values smoothly constrained between 0 and 1.
+        """
+        result = torch.where(
+            x < 0, 
+            torch.exp(self.boundary_scale * x),  # Pull values < 0 towards 0
+            torch.where(
+                x > 1,
+                1 - torch.exp(-self.boundary_scale * (x - 1)),  # Pull values > 1 towards 1
+                x  # Keep values in [0, 1] as they are
+            )
+        )
+        return result
+
 class Model(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2310.06625
@@ -40,7 +69,7 @@ class Model(nn.Module):
         )
         self.projector = nn.Sequential(
             nn.Linear(configs.d_model, configs.pred_len, bias=True),  # Final projection to predictions
-            nn.Sigmoid(),  # Constrain output to [0, 1]
+            BoundaryAwareActivation(boundary_scale=10.0)  # Constrain output to [0, 1]
         )
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
