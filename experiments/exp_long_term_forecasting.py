@@ -41,7 +41,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
     def _select_criterion(self):
         # Define penalty weight (tune based on importance of penalty)
-        penalty_weight = 10.0  
+        penalty_weight = 50.0  
 
         def custom_loss(predictions, targets):
             # Base MSE loss
