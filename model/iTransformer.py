@@ -41,15 +41,7 @@ class ProbabilityAwareActivation(nn.Module):
         )
 
         return adjusted_x
-
-class PermuteLayer(nn.Module):
-    def __init__(self, *dims):
-        super(PermuteLayer, self).__init__()
-        self.dims = dims
-
-    def forward(self, x):
-        return x.permute(*self.dims)
-
+    
 class Model(nn.Module):
     """
     Paper link: https://arxiv.org/abs/2310.06625
@@ -70,7 +62,7 @@ class Model(nn.Module):
             [
                 EncoderLayer(
                     AttentionLayer(
-                        FullAttention(False, configs.factor*0.9, attention_dropout=configs.dropout*0.8,
+                        FullAttention(False, configs.factor*0.8, attention_dropout=configs.dropout*1.5,
                                       output_attention=configs.output_attention), configs.d_model, configs.n_heads),
                     configs.d_model,
                     d_ff=int(configs.d_ff * 1.0),
