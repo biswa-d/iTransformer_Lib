@@ -28,7 +28,7 @@ class Model(nn.Module):
             [
                 EncoderLayer(
                     AttentionLayer(
-                        FullAttention(False, configs.factor, attention_dropout=configs.dropout*0.8,
+                        FullAttention(False, configs.factor*0.6, attention_dropout=configs.dropout*0.8,
                                       output_attention=configs.output_attention), configs.d_model, configs.n_heads),
                     configs.d_model,
                     d_ff=int(configs.d_ff * 1.5),
@@ -39,6 +39,12 @@ class Model(nn.Module):
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
         self.projector = nn.Linear(configs.d_model, configs.pred_len, bias=True)
+        self.smoothing_conv = nn.Conv1d(
+            in_channels=configs.d_model,  # Match embedding size (d_model)
+            out_channels=configs.d_model,
+            kernel_size=3,  # Smoothing kernel size
+            padding=1  # To maintain sequence length
+        )
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         if self.use_norm:
@@ -63,6 +69,12 @@ class Model(nn.Module):
 
         # B N E -> B N S -> B S N 
         dec_out = self.projector(enc_out).permute(0, 2, 1)[:, :, :N] # filter the covariates
+        # B N S -> B S N for convolution
+        dec_out = dec_out.permute(0, 2, 1)  # [B, N, S] -> [B, S, N] for Conv1d
+        dec_out = self.smoothing_conv(dec_out)  # Apply convolution
+        dec_out = dec_out.permute(0, 2, 1)  # [B, S, N] -> [B, N, S]
+
+
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
