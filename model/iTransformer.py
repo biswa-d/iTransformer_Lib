@@ -75,8 +75,7 @@ class Model(nn.Module):
         )
         self.projector = nn.Sequential(
             nn.Linear(configs.d_model, configs.pred_len * 5, bias=True),  # Project to 5-step predictions
-            nn.ReLU(),
-            nn.Unflatten(2, (5, configs.pred_len)),  # Reshape to (B, N, 5, pred_len)
+            nn.Permute(0, 2, 1),  # Rearrange to (B, 5, N) for Conv1d
             nn.Conv1d(
                 in_channels=5,
                 out_channels=1,  # Reduce to 1 prediction per sequence
