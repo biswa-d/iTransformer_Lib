@@ -74,17 +74,19 @@ class Model(nn.Module):
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
         self.projector = nn.Sequential(
-            nn.Linear(configs.d_model, configs.pred_len * 5, bias=True),  # Project to pred_len * 5
-            #nn.ReLU(),  # Stabilize intermediate predictions
+            nn.Linear(configs.d_model, configs.pred_len * 5, bias=True),  # Project to 5-step predictions
+            nn.ReLU(),
+            nn.Unflatten(2, (5, configs.pred_len)),  # Reshape to (B, N, 5, pred_len)
             nn.Conv1d(
-                in_channels=5,  # Pool over 5 predictions
-                out_channels=1,  # Reduce to one prediction
-                kernel_size=3,  # Smooth predictions
-                padding=1  # Maintain the length
+                in_channels=5,
+                out_channels=1,  # Reduce to 1 prediction per sequence
+                kernel_size=3,  # Apply smoothing over 3 steps
+                padding=1  # Maintain sequence length
             ),
-            nn.AvgPool1d(kernel_size=5, stride=5),  # Average predictions across 5 steps
+            nn.AvgPool1d(kernel_size=5, stride=1),  # Pool across 5 steps for averaging
             ProbabilityAwareActivation(decay_rate=5.0)  # Constrain output to [0, 1]
         )
+
 
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
