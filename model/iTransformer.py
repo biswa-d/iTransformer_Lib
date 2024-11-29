@@ -63,10 +63,10 @@ class Model(nn.Module):
             [
                 EncoderLayer(
                     AttentionLayer(
-                        FullAttention(False, configs.factor, attention_dropout=configs.dropout*0.8,
+                        FullAttention(False, configs.factor*0.9, attention_dropout=configs.dropout*0.8,
                                       output_attention=configs.output_attention), configs.d_model, configs.n_heads),
                     configs.d_model,
-                    d_ff=int(configs.d_ff * 1.5),
+                    d_ff=int(configs.d_ff * 1.0),
                     dropout=configs.dropout,
                     activation=configs.activation
                 ) for l in range(configs.e_layers)
@@ -74,9 +74,18 @@ class Model(nn.Module):
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
         self.projector = nn.Sequential(
-            nn.Linear(configs.d_model, configs.pred_len, bias=True),  # Final projection to predictions
+            nn.Linear(configs.d_model, configs.pred_len * 5, bias=True),  # Project to pred_len * 5
+            #nn.ReLU(),  # Stabilize intermediate predictions
+            nn.Conv1d(
+                in_channels=5,  # Pool over 5 predictions
+                out_channels=1,  # Reduce to one prediction
+                kernel_size=3,  # Smooth predictions
+                padding=1  # Maintain the length
+            ),
+            nn.AvgPool1d(kernel_size=5, stride=5),  # Average predictions across 5 steps
             ProbabilityAwareActivation(decay_rate=5.0)  # Constrain output to [0, 1]
         )
+
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         if self.use_norm:
