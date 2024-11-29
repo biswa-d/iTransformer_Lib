@@ -39,6 +39,7 @@ class Model(nn.Module):
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
         #self.projector = nn.Linear(configs.d_model, configs.pred_len, bias=True)
+        # Projector with smoothing
         self.projector = nn.Sequential(
             nn.Conv1d(
                 in_channels=configs.d_model,  # Number of latent dimensions
@@ -47,8 +48,9 @@ class Model(nn.Module):
                 padding=1  # Maintain the original size
             ),
             nn.ReLU(),  # Stabilize before projection
-            nn.Linear(configs.d_model, configs.pred_len, bias=True),  # Final projection to predictions
-            nn.Sigmoid()  # Constrain output to [0 and 1]
+            nn.Flatten(start_dim=2),  # Flatten sequence dimension for Linear
+            nn.Linear(configs.d_model * configs.seq_len, configs.pred_len),  # Final projection to predictions
+            nn.Sigmoid()  # Constrain output to [0, 1]
         )
 
 
