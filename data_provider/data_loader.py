@@ -217,7 +217,12 @@ class Dataset_Custom(Dataset):
         self.data_path = data_path
         self.__read_data__()
 
-    def __read_data__(self):
+    def __read_data__(self, noise_std=0.01): # added noise to stabilize training
+        """
+        Read and preprocess the data, with optional noise injection.
+        Args:
+            noise_std (float): Standard deviation of Gaussian noise to be added (default: 0.01).
+        """
         self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
 
@@ -230,7 +235,7 @@ class Dataset_Custom(Dataset):
         num_train = int(len(df_raw) * 0.8)
         num_vali = len(df_raw) - num_train
         border1s = [0, num_train - self.seq_len]  # Train and validation
-        border2s = [num_train, len(df_raw)]       # Train and validation
+        border2s = [num_train, len(df_raw)]      # Train and validation
 
         # Handle the test case separately
         if self.set_type == 2:  # Test
@@ -241,12 +246,18 @@ class Dataset_Custom(Dataset):
             border1 = border1s[self.set_type]
             border2 = border2s[self.set_type]
 
-
         if self.features == 'M' or self.features == 'MS':
             cols_data = df_raw.columns[1:]
             df_data = df_raw[cols_data]
         elif self.features == 'S':
             df_data = df_raw[[self.target]]
+
+        # Inject noise into training data (if required)
+        if noise_std > 0 and self.set_type == 0:  # Add noise only for training data
+            for col in cols_data:
+                df_raw.loc[border1s[0]:border2s[0], col] += np.random.normal(
+                    0, noise_std, size=len(df_raw.loc[border1s[0]:border2s[0], col])
+                )
 
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
@@ -272,6 +283,7 @@ class Dataset_Custom(Dataset):
         self.data_x = data[border1:border2]
         self.data_y = data[border1:border2]
         self.data_stamp = data_stamp
+
 
     def __getitem__(self, index):
         s_begin = index
