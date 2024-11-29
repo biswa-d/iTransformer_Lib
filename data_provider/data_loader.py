@@ -217,7 +217,7 @@ class Dataset_Custom(Dataset):
         self.data_path = data_path
         self.__read_data__()
 
-    def __read_data__(self, noise_std=0.01): # added noise to stabilize training
+    def __read_data__(self, noise_std=0.015): # added noise to stabilize training
         """
         Read and preprocess the data, with optional noise injection.
         Args:
@@ -255,8 +255,8 @@ class Dataset_Custom(Dataset):
         # Inject noise into training data (if required)
         if noise_std > 0 and self.set_type == 0:  # Add noise only for training data
             for col in cols_data:
-                df_raw.loc[border1s[0]:border2s[0], col] += np.random.normal(
-                    0, noise_std, size=len(df_raw.loc[border1s[0]:border2s[0], col])
+                df_raw.loc[border1s[0]:border2s[0], self.target] += np.random.normal(
+                    0, noise_std, size=len(df_raw.loc[border1s[0]:border2s[0], self.target])
                 )
 
         if self.scale:
