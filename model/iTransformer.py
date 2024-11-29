@@ -42,6 +42,13 @@ class ProbabilityAwareActivation(nn.Module):
 
         return adjusted_x
 
+class PermuteLayer(nn.Module):
+    def __init__(self, *dims):
+        super(PermuteLayer, self).__init__()
+        self.dims = dims
+
+    def forward(self, x):
+        return x.permute(*self.dims)
 
 class Model(nn.Module):
     """
@@ -74,19 +81,18 @@ class Model(nn.Module):
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
         self.projector = nn.Sequential(
-            nn.Linear(configs.d_model, configs.pred_len * 5, bias=True),  # Project to 5-step predictions
-            nn.Lambda(lambda x: x.permute(0, 2, 1)),  # Rearrange to (B, 5, N) for Conv1d
+            nn.Linear(configs.d_model, 5, bias=True),  # Project to 5 steps (since pred_len is 1)
+            nn.ReLU(),
+            PermuteLayer(0, 2, 1),  # Rearrange to (B, 5, N) for Conv1d
             nn.Conv1d(
                 in_channels=5,
-                out_channels=1,  # Reduce to 1 prediction per sequence
+                out_channels=1,  # Reduce to 1 channel
                 kernel_size=3,  # Apply smoothing over 3 steps
-                padding=1  # Maintain sequence length
+                padding=1  # Maintain the length
             ),
-            nn.AvgPool1d(kernel_size=5, stride=1),  # Pool across 5 steps for averaging
+            nn.AvgPool1d(kernel_size=5, stride=1),  # Pool across 5 steps
             ProbabilityAwareActivation(decay_rate=5.0)  # Constrain output to [0, 1]
         )
-
-
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         if self.use_norm:
