@@ -21,7 +21,7 @@ class ProbabilityAwareActivation(nn.Module):
         super(ProbabilityAwareActivation, self).__init__()
         self.decay_rate = decay_rate
 
-    def forward(self, x, running_mean=0.5):
+    def forward(self, x):
         """
         Args:
             x (Tensor): Input tensor.
@@ -29,20 +29,17 @@ class ProbabilityAwareActivation(nn.Module):
         Returns:
             Tensor: Adjusted tensor values based on boundary probabilities.
         """
-        # Calculate probabilities of boundary adjustment
-        prob_below_0 = torch.sigmoid(-self.decay_rate * (x - running_mean))
-        prob_above_1 = torch.sigmoid(self.decay_rate * (x - 1 - running_mean))
-
         # Smooth boundary adjustments based on probabilities
         adjusted_x = torch.where(
-            x < 0, 
-            x * prob_below_0,  # Scale down values below 0
+            x < 0,
+            x * torch.sigmoid(-self.decay_rate * x),  # Stronger pull below 0
             torch.where(
                 x > 1,
-                1 - (1 - x) * prob_above_1,  # Scale down values above 1
-                x  # Keep values within [0, 1]
+                1 - (1 - x) * torch.sigmoid(self.decay_rate * (x - 1)),  # Stronger pull above 1
+                x  # Keep values in [0, 1]
             )
         )
+
         return adjusted_x
 
 
