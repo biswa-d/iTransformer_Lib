@@ -8,34 +8,43 @@ import numpy as np
 import scipy.signal as signal
 
 
-class BoundaryAwareActivation(nn.Module):
-    def __init__(self, boundary_scale=10.0):
-        """
-        Custom boundary-aware activation function.
-        Args:
-            boundary_scale (float): Controls the strength of the pull towards 0 and 1.
-        """
-        super(BoundaryAwareActivation, self).__init__()
-        self.boundary_scale = boundary_scale
+import torch
+import torch.nn as nn
 
-    def forward(self, x):
+class ProbabilityAwareActivation(nn.Module):
+    def __init__(self, decay_rate=5.0):
         """
-        Apply the boundary-aware activation function.
+        Probability-aware activation function.
+        Args:
+            decay_rate (float): Controls the influence of probabilities on boundary correction.
+        """
+        super(ProbabilityAwareActivation, self).__init__()
+        self.decay_rate = decay_rate
+
+    def forward(self, x, running_mean=0.5):
+        """
         Args:
             x (Tensor): Input tensor.
+            running_mean (float): Dynamic mean of past predictions for boundary adjustments.
         Returns:
-            Tensor: Activated tensor with values smoothly constrained between 0 and 1.
+            Tensor: Adjusted tensor values based on boundary probabilities.
         """
-        result = torch.where(
+        # Calculate probabilities of boundary adjustment
+        prob_below_0 = torch.sigmoid(-self.decay_rate * (x - running_mean))
+        prob_above_1 = torch.sigmoid(self.decay_rate * (x - 1 - running_mean))
+
+        # Smooth boundary adjustments based on probabilities
+        adjusted_x = torch.where(
             x < 0, 
-            torch.exp(self.boundary_scale * x),  # Pull values < 0 towards 0
+            x * prob_below_0,  # Scale down values below 0
             torch.where(
                 x > 1,
-                1 - torch.exp(-self.boundary_scale * (x - 1)),  # Pull values > 1 towards 1
-                x  # Keep values in [0, 1] as they are
+                1 - (1 - x) * prob_above_1,  # Scale down values above 1
+                x  # Keep values within [0, 1]
             )
         )
-        return result
+        return adjusted_x
+
 
 class Model(nn.Module):
     """
@@ -69,7 +78,7 @@ class Model(nn.Module):
         )
         self.projector = nn.Sequential(
             nn.Linear(configs.d_model, configs.pred_len, bias=True),  # Final projection to predictions
-            BoundaryAwareActivation(boundary_scale=10.0)  # Constrain output to [0, 1]
+            ProbabilityAwareActivation(decay_rate=5.0)  # Constrain output to [0, 1]
         )
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
