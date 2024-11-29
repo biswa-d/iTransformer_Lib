@@ -38,17 +38,19 @@ class Model(nn.Module):
             ],
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
-        self.projector = nn.Linear(configs.d_model, configs.pred_len, bias=True)
-        # self.projector = nn.Sequential(
-        #     nn.Linear(configs.d_model, configs.pred_len, bias=True),
-        #     nn.Sigmoid()  # Constrain output between 0 and 1
-        # )
-        self.smoothing_conv = nn.Conv1d(
-            in_channels=configs.d_model,  # Match embedding size (d_model)
-            out_channels=configs.d_model,
-            kernel_size=3,  # Smoothing kernel size
-            padding=1  # To maintain sequence length
+        #self.projector = nn.Linear(configs.d_model, configs.pred_len, bias=True)
+        self.projector = nn.Sequential(
+            nn.Conv1d(
+                in_channels=configs.d_model,  # Number of latent dimensions
+                out_channels=configs.d_model,
+                kernel_size=3,  # Smoothing kernel size
+                padding=1  # Maintain the original size
+            ),
+            nn.ReLU(),  # Stabilize before projection
+            nn.Linear(configs.d_model, configs.pred_len, bias=True),  # Final projection to predictions
+            nn.Sigmoid()  # Constrain output to [0 and 1]
         )
+
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         if self.use_norm:
