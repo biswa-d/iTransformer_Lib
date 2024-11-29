@@ -113,4 +113,7 @@ class Model(nn.Module):
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-        return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+        dec_out[:, -self.pred_len:, :]
+        output = torch.clamp(dec_out, 0, 1)
+        return output
+        # return dec_out[:, -self.pred_len:, :]  # [B, L, D]
