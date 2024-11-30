@@ -73,8 +73,8 @@ class Model(nn.Module):
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
         self.projector = nn.Sequential(
-            nn.Linear(configs.d_model, 5, bias=True),  # Project to 5 steps (since pred_len is 1)
-            ProbabilityAwareActivation(decay_rate=5.0)  # Constrain output to [0, 1]
+            nn.Linear(configs.d_model, 5, bias=True)  # Project to 5 steps (since pred_len is 1)
+            #ProbabilityAwareActivation(decay_rate=5.0)  # Constrain output to [0, 1]
         )
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
