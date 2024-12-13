@@ -323,6 +323,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         results_df.to_csv(csv_file_path, index=False)
 
         print(f'Results saved to: {csv_file_path}')
+        # Save the model with MSE in the filename
+        mse_value = round(mse, 6)  # Round the MSE to 6 decimal places for filename clarity
+        checkpoint_path = os.path.join(folder_path, f'checkpoint_{mse_value}.pth')
+        torch.save(self.model.state_dict(), checkpoint_path)
+
+        print(f'Model checkpoint saved to: {checkpoint_path}')
 
         return
 
