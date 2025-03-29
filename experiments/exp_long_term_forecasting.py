@@ -241,24 +241,27 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
-                # print('test shape:', outputs.shape, batch_y.shape)
-                # print('test shape:', outputs.shape, batch_y.shape)
+
+                # Initialize pred and true with raw values
+                pred = outputs
+                true = batch_y
+
+                # Only rescale if both conditions are met
                 if test_data.scale and self.args.inverse:
                     # Fetch mean and std for the output column
                     output_col_index = -1  # Assuming the last column corresponds to the prediction
                     output_mean = test_data.scaler.mean_[output_col_index]
                     output_std = test_data.scaler.scale_[output_col_index]
 
-                    # Rescale predictions
-                    rescaled_pred = (outputs * output_std) + output_mean
-                    rescaled_true = (batch_y * output_std) + output_mean
+                    # Rescale predictions and true values (update pred and true)
+                    pred = (outputs * output_std) + output_mean
+                    true = (batch_y * output_std) + output_mean
 
-                    # print("Shape of rescaled predictions:", rescaled_pred.shape)
-                    # print("Shape of rescaled true labels:", rescaled_true.shape)
+                    # print("Shape of rescaled predictions:", pred.shape)
+                    # print("Shape of rescaled true labels:", true.shape)
 
-                # Update predictions and true values for metrics
-                pred = rescaled_pred
-                true = rescaled_true
+                # Clamp predictions AFTER potential rescaling
+                pred = np.clip(pred, 0, 1)
 
                 # Append to the results
                 preds.append(pred)
