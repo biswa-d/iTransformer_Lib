@@ -3,19 +3,19 @@
 # Create Logs directory if it doesn't exist
 mkdir -p Logs
 
-# Create timestamped log file and unique setting file path
+# Create timestamped log file and run timestamp variable
 RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
-LOG_FILE="Logs/training_${RUN_TIMESTAMP}.log"
-SETTING_FILE="Logs/last_setting_${RUN_TIMESTAMP}.txt" # Unique setting file per run
+# LOG_FILE="Logs/training_${RUN_TIMESTAMP}.log" # Logging disabled for now
+# SETTING_FILE="Logs/last_setting_${RUN_TIMESTAMP}.txt" # Not using unique setting files
 
-# SHM setup
+# SHM setup (Optional, keep if needed)
 SHM_DIR=/tmp/shm_dehuryb
 mkdir -p "$SHM_DIR"
 find "$SHM_DIR" -maxdepth 1 -type f -name "torch_*" -exec rm -f {} \;
 find "$SHM_DIR" -maxdepth 1 -type f -name "nccl-*" -exec rm -f {} \;
 
-# Hyperparameters (unchanged)
-MODEL_ID="custom_model"
+# Set hyperparameters for training
+MODEL_ID="custom_small"
 MODEL="iTransformer" #test
 DATA="custom"
 ROOT_PATH="./data/"
@@ -30,31 +30,31 @@ ENC_IN=3
 DEC_IN=3
 C_OUT=1
 D_MODEL=128
-N_HEADS=4
+N_HEADS=2
 E_LAYERS=2
 D_LAYERS=1
-D_FF=1024
+D_FF=512
 MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
 TRAIN_EPOCHS=200
-BATCH_SIZE=64
+BATCH_SIZE=200
 PATIENCE=20
-LEARNING_RATE=0.0005
+LEARNING_RATE=0.001
 DROPOUT=0.35
 
 # Log start time and parameters
-echo "===== Training Started at $(date) =====" >> "$LOG_FILE"
-echo "Model: $MODEL" >> "$LOG_FILE"
-echo "Devices: $DEVICES" >> "$LOG_FILE"
-echo "Epochs: $TRAIN_EPOCHS" >> "$LOG_FILE"
-echo "Batch Size: $BATCH_SIZE" >> "$LOG_FILE"
-echo "Learning Rate: $LEARNING_RATE" >> "$LOG_FILE"
+echo "===== Training Started at $(date) ====="
+echo "Model: $MODEL"
+echo "Devices: $DEVICES"
+echo "Epochs: $TRAIN_EPOCHS"
+echo "Batch Size: $BATCH_SIZE"
+echo "Learning Rate: $LEARNING_RATE"
 
 # Train the model
-echo "Starting training on GPUs $DEVICES..." >> "$LOG_FILE"
+echo "Starting training on GPUs $DEVICES..."
 python run.py --is_training 1 \
-               --setting_file "$SETTING_FILE" \
+               --run_timestamp $RUN_TIMESTAMP \
                --model_id $MODEL_ID \
                --model $MODEL \
                --data $DATA \
@@ -81,15 +81,14 @@ python run.py --is_training 1 \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
                --dropout $DROPOUT \
-               --inverse >> "$LOG_FILE" 2>&1
+               --inverse
 
-# Log training completion
-echo "===== Training Completed at $(date) =====" >> "$LOG_FILE"
+echo "Training finished."
 
 # Test the model
-echo "Starting testing on GPUs $DEVICES..." >> "$LOG_FILE"
+echo "Starting testing on GPUs $DEVICES..."
 python run.py --is_training 0 \
-               --setting_file "$SETTING_FILE" \
+               --run_timestamp $RUN_TIMESTAMP \
                --model_id $MODEL_ID \
                --model $MODEL \
                --data $DATA \
@@ -116,8 +115,6 @@ python run.py --is_training 0 \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
                --dropout $DROPOUT \
-               --inverse >> "$LOG_FILE" 2>&1
+               --inverse
 
-# Log final completion
-echo "===== Testing Completed at $(date) =====" >> "$LOG_FILE"
-echo "All outputs logged to $LOG_FILE"
+echo "Script finished."
