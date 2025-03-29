@@ -3,10 +3,9 @@
 # Create Logs directory if it doesn't exist
 mkdir -p Logs
 
-# Create timestamped log file and run timestamp variable
+# Create timestamp and unique setting file path
 RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
-# LOG_FILE="Logs/training_${RUN_TIMESTAMP}.log" # Logging disabled for now
-# SETTING_FILE="Logs/last_setting_${RUN_TIMESTAMP}.txt" # Not using unique setting files
+SETTING_FILE_PATH="Logs/setting_${RUN_TIMESTAMP}.txt" # Unique setting file per run
 
 # SHM setup (Optional, keep if needed)
 SHM_DIR=/tmp/shm_dehuryb
@@ -45,6 +44,8 @@ DROPOUT=0.35
 
 # Log start time and parameters
 echo "===== Training Started at $(date) ====="
+echo "Timestamp: $RUN_TIMESTAMP"
+echo "Setting File: $SETTING_FILE_PATH"
 echo "Model: $MODEL"
 echo "Devices: $DEVICES"
 echo "Epochs: $TRAIN_EPOCHS"
@@ -54,67 +55,68 @@ echo "Learning Rate: $LEARNING_RATE"
 # Train the model
 echo "Starting training on GPUs $DEVICES..."
 python run.py --is_training 1 \
-               --run_timestamp $RUN_TIMESTAMP \
-               --model_id $MODEL_ID \
-               --model $MODEL \
-               --data $DATA \
-               --root_path $ROOT_PATH \
-               --data_path $TRAIN_DATA \
-               --features $FEATURES \
-               --target $TARGET \
-               --seq_len $SEQ_LEN \
-               --label_len $LABEL_LEN \
-               --pred_len $PRED_LEN \
-               --enc_in $ENC_IN \
-               --dec_in $DEC_IN \
-               --c_out $C_OUT \
-               --d_model $D_MODEL \
-               --n_heads $N_HEADS \
-               --e_layers $E_LAYERS \
-               --d_layers $D_LAYERS \
-               --d_ff $D_FF \
-               --moving_avg $MOVING_AVG \
-               --factor $FACTOR \
-               --devices $DEVICES \
-               --train_epochs $TRAIN_EPOCHS \
-               --batch_size $BATCH_SIZE \
-               --patience $PATIENCE \
-               --learning_rate $LEARNING_RATE \
-               --dropout $DROPOUT \
+               --run_timestamp "$RUN_TIMESTAMP" \
+               --setting_file_path "$SETTING_FILE_PATH" \
+               --model_id "$MODEL_ID" \
+               --model "$MODEL" \
+               --data "$DATA" \
+               --root_path "$ROOT_PATH" \
+               --data_path "$TRAIN_DATA" \
+               --features "$FEATURES" \
+               --target "$TARGET" \
+               --seq_len "$SEQ_LEN" \
+               --label_len "$LABEL_LEN" \
+               --pred_len "$PRED_LEN" \
+               --enc_in "$ENC_IN" \
+               --dec_in "$DEC_IN" \
+               --c_out "$C_OUT" \
+               --d_model "$D_MODEL" \
+               --n_heads "$N_HEADS" \
+               --e_layers "$E_LAYERS" \
+               --d_layers "$D_LAYERS" \
+               --d_ff "$D_FF" \
+               --moving_avg "$MOVING_AVG" \
+               --factor "$FACTOR" \
+               --devices "$DEVICES" \
+               --train_epochs "$TRAIN_EPOCHS" \
+               --batch_size "$BATCH_SIZE" \
+               --patience "$PATIENCE" \
+               --learning_rate "$LEARNING_RATE" \
+               --dropout "$DROPOUT" \
                --inverse
 
 echo "Training finished."
 
 # Test the model
-echo "Starting testing on GPUs $DEVICES..."
+echo "Starting testing on GPUs $DEVICES using setting from $SETTING_FILE_PATH..."
 python run.py --is_training 0 \
-               --run_timestamp $RUN_TIMESTAMP \
-               --model_id $MODEL_ID \
-               --model $MODEL \
-               --data $DATA \
-               --root_path $ROOT_PATH \
-               --data_path $TEST_DATA \
-               --features $FEATURES \
-               --target $TARGET \
-               --seq_len $SEQ_LEN \
-               --label_len $LABEL_LEN \
-               --pred_len $PRED_LEN \
-               --enc_in $ENC_IN \
-               --dec_in $DEC_IN \
-               --c_out $C_OUT \
-               --d_model $D_MODEL \
-               --n_heads $N_HEADS \
-               --e_layers $E_LAYERS \
-               --d_layers $D_LAYERS \
-               --d_ff $D_FF \
-               --moving_avg $MOVING_AVG \
-               --factor $FACTOR \
-               --devices $DEVICES \
-               --train_epochs $TRAIN_EPOCHS \
-               --batch_size $BATCH_SIZE \
-               --patience $PATIENCE \
-               --learning_rate $LEARNING_RATE \
-               --dropout $DROPOUT \
+               --setting_file_path "$SETTING_FILE_PATH" \
+               --model_id "$MODEL_ID" \
+               --model "$MODEL" \
+               --data "$DATA" \
+               --root_path "$ROOT_PATH" \
+               --data_path "$TEST_DATA" \
+               --features "$FEATURES" \
+               --target "$TARGET" \
+               --seq_len "$SEQ_LEN" \
+               --label_len "$LABEL_LEN" \
+               --pred_len "$PRED_LEN" \
+               --enc_in "$ENC_IN" \
+               --dec_in "$DEC_IN" \
+               --c_out "$C_OUT" \
+               --d_model "$D_MODEL" \
+               --n_heads "$N_HEADS" \
+               --e_layers "$E_LAYERS" \
+               --d_layers "$D_LAYERS" \
+               --d_ff "$D_FF" \
+               --moving_avg "$MOVING_AVG" \
+               --factor "$FACTOR" \
+               --devices "$DEVICES" \
+               --train_epochs "$TRAIN_EPOCHS" \
+               --batch_size "$BATCH_SIZE" \
+               --patience "$PATIENCE" \
+               --learning_rate "$LEARNING_RATE" \
+               --dropout "$DROPOUT" \
                --inverse
 
 echo "Script finished."
