@@ -3,8 +3,9 @@
 # Create Logs directory if it doesn't exist
 mkdir -p Logs
 
-# Create timestamped log file
-LOG_FILE="Logs/training_$(date +'%Y%m%d_%H%M%S').log"
+# Create timestamped log file and run timestamp variable
+RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+LOG_FILE="Logs/training_${RUN_TIMESTAMP}.log"
 
 # SHM setup
 SHM_DIR=/tmp/shm_dehuryb
@@ -50,8 +51,9 @@ echo "Batch Size: $BATCH_SIZE" >> "$LOG_FILE"
 echo "Learning Rate: $LEARNING_RATE" >> "$LOG_FILE"
 
 # Train the model
-echo "Starting training on GPUs $DEVICES..."
+echo "Starting training on GPUs $DEVICES..." >> "$LOG_FILE"
 python run.py --is_training 1 \
+               --run_timestamp $RUN_TIMESTAMP \
                --model_id $MODEL_ID \
                --model $MODEL \
                --data $DATA \
@@ -84,8 +86,9 @@ python run.py --is_training 1 \
 echo "===== Training Completed at $(date) =====" >> "$LOG_FILE"
 
 # Test the model
-echo "Starting testing on GPUs $DEVICES..."
+echo "Starting testing on GPUs $DEVICES..." >> "$LOG_FILE"
 python run.py --is_training 0 \
+               --run_timestamp $RUN_TIMESTAMP \
                --model_id $MODEL_ID \
                --model $MODEL \
                --data $DATA \
