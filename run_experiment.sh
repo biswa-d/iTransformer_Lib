@@ -1,15 +1,27 @@
 #!/bin/bash
 
-# Set hyperparameters for training
+# Create Logs directory if it doesn't exist
+mkdir -p Logs
+
+# Create timestamped log file
+LOG_FILE="Logs/training_$(date +'%Y%m%d_%H%M%S').log"
+
+# SHM setup
+SHM_DIR=/tmp/shm_dehuryb
+mkdir -p "$SHM_DIR"
+find "$SHM_DIR" -maxdepth 1 -type f -name "torch_*" -exec rm -f {} \;
+find "$SHM_DIR" -maxdepth 1 -type f -name "nccl-*" -exec rm -f {} \;
+
+# Hyperparameters (unchanged)
 MODEL_ID="custom_model"
 MODEL="iTransformer" #test
 DATA="custom"
 ROOT_PATH="./data/"
 TRAIN_DATA="lg_train.csv"
-TEST_DATA="lg_valid.csv"
+TEST_DATA="lg_test.csv"
 FEATURES="MS"
 TARGET="Voltage"
-SEQ_LEN=400
+SEQ_LEN=200
 LABEL_LEN=0
 PRED_LEN=1
 ENC_IN=3
@@ -23,12 +35,19 @@ D_FF=1024
 MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
-TRAIN_EPOCHS=1
-BATCH_SIZE=400
-PATIENCE=100
-LEARNING_RATE=0.001
-DROPOUT=0.2
+TRAIN_EPOCHS=200
+BATCH_SIZE=64
+PATIENCE=20
+LEARNING_RATE=0.0005
+DROPOUT=0.35
 
+# Log start time and parameters
+echo "===== Training Started at $(date) =====" >> "$LOG_FILE"
+echo "Model: $MODEL" >> "$LOG_FILE"
+echo "Devices: $DEVICES" >> "$LOG_FILE"
+echo "Epochs: $TRAIN_EPOCHS" >> "$LOG_FILE"
+echo "Batch Size: $BATCH_SIZE" >> "$LOG_FILE"
+echo "Learning Rate: $LEARNING_RATE" >> "$LOG_FILE"
 
 # Train the model
 echo "Starting training on GPUs $DEVICES..."
@@ -59,7 +78,10 @@ python run.py --is_training 1 \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
                --dropout $DROPOUT \
-               --inverse
+               --inverse >> "$LOG_FILE" 2>&1
+
+# Log training completion
+echo "===== Training Completed at $(date) =====" >> "$LOG_FILE"
 
 # Test the model
 echo "Starting testing on GPUs $DEVICES..."
@@ -90,4 +112,8 @@ python run.py --is_training 0 \
                --patience $PATIENCE \
                --learning_rate $LEARNING_RATE \
                --dropout $DROPOUT \
-               --inverse
+               --inverse >> "$LOG_FILE" 2>&1
+
+# Log final completion
+echo "===== Testing Completed at $(date) =====" >> "$LOG_FILE"
+echo "All outputs logged to $LOG_FILE"
