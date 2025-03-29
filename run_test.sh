@@ -4,33 +4,37 @@
 SETTING_FILE_PATH=""
 
 # --- Configuration (Define defaults or allow overrides via arguments) ---
-# Defaults should ideally match common training parameters, but can be overridden.
-MODEL_ID="custom_small" # Default from original script was "custom_model"
-MODEL="iTransformer"    # Default matches original script
-DATA="custom"           # Default matches original script
-ROOT_PATH="./data/"     # Default updated from original './data/sample_data'
-TEST_DATA="lg_test.csv" # Default test dataset, original had sample_data_test.csv
-FEATURES="MS"           # Default matches original script
-TARGET="Voltage"        # Default matches original script
-SEQ_LEN=200             # Default updated from original 60
-LABEL_LEN=0             # Default matches original script
-PRED_LEN=1              # Default matches original script
-ENC_IN=3                # Default matches original script
-DEC_IN=3                # Default matches original script
-C_OUT=1                 # Default matches original script
-D_MODEL=128             # Default added
-N_HEADS=2               # Default added
-E_LAYERS=2              # Default added
-D_LAYERS=1              # Default added
-D_FF=512                # Default added
-MOVING_AVG=25           # Default added
-FACTOR=1                # Default added
-DEVICES="0,1"           # Default matches original script
-BATCH_SIZE=200          # Default added
-DROPOUT=0.35            # Default added
+# Defaults set to match the specific training run: setting_20250329_094517
+MODEL_ID="custom_small_2"
+MODEL="iTransformer"
+DATA="custom"
+ROOT_PATH="./data/"
+TEST_DATA="lg_test.csv" # Test data path used in the run
+FEATURES="MS"
+TARGET="Voltage"
+SEQ_LEN=200
+LABEL_LEN=0
+PRED_LEN=1
+ENC_IN=3
+DEC_IN=3
+C_OUT=1
+D_MODEL=32
+N_HEADS=4
+E_LAYERS=2
+D_LAYERS=1
+D_FF=64
+MOVING_AVG=25
+FACTOR=1
+DEVICES="0,1"
+BATCH_SIZE=100 # Test batch size used in the run
+DROPOUT=0.35
+# Other relevant parameters from the run (can be added to OTHER_ARGS if needed by run.py test mode)
+# embed='timeF', activation='gelu', use_norm=True
 
 # Array to hold arguments not explicitly handled here but needed by run.py
 OTHER_ARGS=()
+# Add use_norm=True by default based on the run log, assuming run.py accepts it directly
+OTHER_ARGS+=(--use_norm)
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
