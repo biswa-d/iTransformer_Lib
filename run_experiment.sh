@@ -3,9 +3,10 @@
 # Create Logs directory if it doesn't exist
 mkdir -p Logs
 
-# Create timestamped log file and run timestamp variable
+# Create timestamped log file and unique setting file path
 RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
 LOG_FILE="Logs/training_${RUN_TIMESTAMP}.log"
+SETTING_FILE="Logs/last_setting_${RUN_TIMESTAMP}.txt" # Unique setting file per run
 
 # SHM setup
 SHM_DIR=/tmp/shm_dehuryb
@@ -53,7 +54,7 @@ echo "Learning Rate: $LEARNING_RATE" >> "$LOG_FILE"
 # Train the model
 echo "Starting training on GPUs $DEVICES..." >> "$LOG_FILE"
 python run.py --is_training 1 \
-               --run_timestamp $RUN_TIMESTAMP \
+               --setting_file "$SETTING_FILE" \
                --model_id $MODEL_ID \
                --model $MODEL \
                --data $DATA \
@@ -88,7 +89,7 @@ echo "===== Training Completed at $(date) =====" >> "$LOG_FILE"
 # Test the model
 echo "Starting testing on GPUs $DEVICES..." >> "$LOG_FILE"
 python run.py --is_training 0 \
-               --run_timestamp $RUN_TIMESTAMP \
+               --setting_file "$SETTING_FILE" \
                --model_id $MODEL_ID \
                --model $MODEL \
                --data $DATA \
