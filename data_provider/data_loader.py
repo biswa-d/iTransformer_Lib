@@ -230,13 +230,15 @@ class Dataset_Custom(Dataset):
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
 
-        '''
-        df_raw.columns: ['date', ...(other features), target feature]
-        '''
-        cols = list(df_raw.columns)
-        cols.remove(self.target)
-        cols.remove('date')
-        df_raw = df_raw[['date'] + cols + [self.target]]
+        # Determine feature columns (excluding target and date)
+        feature_cols = list(df_raw.columns)
+        feature_cols.remove(self.target)
+        feature_cols.remove('date')
+        target_col = self.target
+
+        # Rearrange df_raw to have features first, then target
+        df_raw = df_raw[['date'] + feature_cols + [target_col]]
+
         # print(cols)
         num_train = int(len(df_raw) * 0.7)
         num_test = int(len(df_raw) * 0.2)
@@ -246,19 +248,32 @@ class Dataset_Custom(Dataset):
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 
+        # Select all numerical columns (features + target) for scaling
         if self.features == 'M' or self.features == 'MS':
-            cols_data = df_raw.columns[1:]
-            df_data = df_raw[cols_data]
-        elif self.features == 'S':
-            df_data = df_raw[[self.target]]
+            # Use the rearranged order: feature_cols + [target_col]
+            cols_for_scaling = feature_cols + [target_col]
+            df_data_full = df_raw[cols_for_scaling]
+        elif self.features == 'S': # Should not happen if target != 'OT'
+            df_data_full = df_raw[[self.target]]
+        else:
+             raise ValueError(f"Unsupported features type: {self.features}")
 
         if self.scale:
-            train_data = df_data[border1s[0]:border2s[0]]
-            self.scaler.fit(train_data.values)
-            data = self.scaler.transform(df_data.values)
+            # Fit scaler on the training part of the full data (features + target)
+            train_data_full = df_data_full.iloc[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data_full.values)
+            # Transform the full data
+            data_scaled_full = self.scaler.transform(df_data_full.values)
         else:
-            data = df_data.values
+            data_scaled_full = df_data_full.values
 
+        # Assign data_x (only features) and data_y (features + target)
+        # Features are all columns except the last one in data_scaled_full
+        self.data_x = data_scaled_full[:, :-1][border1:border2]
+        # Data_y includes all scaled columns (features + target)
+        self.data_y = data_scaled_full[border1:border2]
+
+        # --- Time Stamp Processing (remains the same) ---
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
         if self.timeenc == 0:
@@ -270,13 +285,8 @@ class Dataset_Custom(Dataset):
         elif self.timeenc == 1:
             data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
             data_stamp = data_stamp.transpose(1, 0)
-
-        self.data_x = data[border1:border2]
-        if self.features == 'MS':
-            self.data_y = data[border1:border2]
-        else:
-            self.data_y = data[border1:border2]
         self.data_stamp = data_stamp
+        # --- End Time Stamp Processing ---
 
     def __getitem__(self, index):
         s_begin = index
@@ -284,22 +294,28 @@ class Dataset_Custom(Dataset):
         r_begin = s_end - self.label_len
         r_end = r_begin + self.label_len + self.pred_len
 
+        # seq_x contains only feature columns now
         seq_x = self.data_x[s_begin:s_end]
+        # seq_y contains feature and target columns
         seq_y = self.data_y[r_begin:r_end]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
 
         # Inject noise during training if enabled
         if self.use_noise:
-            # Create noise for each feature
+            # Create noise for feature columns only (seq_x)
             noise = np.zeros_like(seq_x)
-            # Assuming the columns are in order: Voltage, Current, Temp, SOC
-            noise[:, 0] = np.random.normal(0, self.noise_voltage, size=seq_x.shape[0])  # Voltage
-            noise[:, 1] = np.random.normal(0, self.noise_current, size=seq_x.shape[0])  # Current
-            noise[:, 2] = np.random.normal(0, self.noise_temp, size=seq_x.shape[0])     # Temp
-            noise[:, 3] = np.random.normal(0, self.noise_soc, size=seq_x.shape[0])      # SOC
+            # Apply noise based on correct feature order and parameters
+            # Assuming feature order in self.data_x is: Current, Temp, SOC
+            if seq_x.shape[1] > 0: # Check if Current feature exists
+                noise[:, 0] = np.random.normal(0, self.noise_current, size=seq_x.shape[0])
+            if seq_x.shape[1] > 1: # Check if Temp feature exists
+                noise[:, 1] = np.random.normal(0, self.noise_temp, size=seq_x.shape[0])
+            if seq_x.shape[1] > 2: # Check if SOC feature exists
+                noise[:, 2] = np.random.normal(0, self.noise_soc, size=seq_x.shape[0])
+            # Note: noise_voltage is not used here as Voltage is not in seq_x
             
-            # Apply noise to the input sequence
+            # Apply noise to the input sequence (features only)
             seq_x = seq_x + noise
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark

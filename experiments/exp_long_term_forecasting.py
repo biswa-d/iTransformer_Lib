@@ -222,7 +222,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # decoder input
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                # encoder - decoder
+                # encoder - decoder: Use the original batch_x
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if self.args.output_attention:
@@ -236,15 +236,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
 
+                # Select the target dimension from the output
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
-                outputs = outputs.detach().cpu().numpy()
-                batch_y = batch_y.detach().cpu().numpy()
+                # Prepare original batch_y for comparison (select target dim)
+                batch_y_for_loss = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device) # Use original batch_y for ground truth
 
-                # Initialize pred and true with raw values
+                # Detach outputs and original batch_y for processing/saving
+                outputs = outputs.detach().cpu().numpy()
+                batch_y_numpy = batch_y.detach().cpu().numpy() # Use original batch_y for saving true values
+
+                # Initialize pred and true with raw model outputs and original batch_y values
                 pred = outputs
-                true = batch_y
+                true = batch_y_numpy[:, -self.args.pred_len:, f_dim:] # Extract target dimension from original batch_y numpy
 
                 # Only rescale if both conditions are met
                 if test_data.scale and self.args.inverse:
@@ -255,7 +259,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                     # Rescale predictions and true values (update pred and true)
                     pred = (outputs * output_std) + output_mean
-                    true = (batch_y * output_std) + output_mean
+                    true = (batch_y_numpy[:, -self.args.pred_len:, f_dim:] * output_std) + output_mean
 
                     # print("Shape of rescaled predictions:", pred.shape)
                     # print("Shape of rescaled true labels:", true.shape)
