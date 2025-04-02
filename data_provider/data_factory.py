@@ -14,26 +14,27 @@ data_dict = {
 
 
 def data_provider(args, flag):
-    Data = data_dict[args.data]
+    Data = Dataset_Custom
     timeenc = 0 if args.embed != 'timeF' else 1
 
     if flag == 'test':
         shuffle_flag = False
         drop_last = True
-        batch_size = args.batch_size 
+        batch_size = args.batch_size
         freq = args.freq
+        use_noise = False
     elif flag == 'pred':
         shuffle_flag = False
         drop_last = False
         batch_size = 1
         freq = args.freq
-        Data = Dataset_Pred
+        use_noise = False
     else:
         shuffle_flag = True
         drop_last = True
-        batch_size = args.batch_size  # bsz for train and valid
+        batch_size = args.batch_size
         freq = args.freq
-
+        use_noise = args.use_noise
     data_set = Data(
         root_path=args.root_path,
         data_path=args.data_path,
@@ -43,6 +44,11 @@ def data_provider(args, flag):
         target=args.target,
         timeenc=timeenc,
         freq=freq,
+        noise_voltage=args.noise_voltage,
+        noise_current=args.noise_current,
+        noise_temp=args.noise_temp,
+        noise_soc=args.noise_soc,
+        use_noise=use_noise
     )
     print(flag, len(data_set))
     data_loader = DataLoader(
