@@ -240,8 +240,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 target_indices = [1, 2, 3] # Indices for Temp, SOC, and Voltage
                 # Select the relevant columns from the raw model output
                 outputs_selected = outputs_full[:, -self.args.pred_len:, target_indices]
-                # Prepare original batch_y for comparison (select target dims)
-                # Note: batch_y here still refers to the full batch_y from the dataloader
+
+                # <<< ADD DEBUG PRINT >>>
+                print(f"DEBUG: batch_y shape on device before selection: {batch_y.shape}")
+                print(f"DEBUG: target_indices: {target_indices}")
+                # <<< END DEBUG PRINT >>>
+
                 batch_y_selected = batch_y[:, -self.args.pred_len:, target_indices].to(self.device)
 
                 # Detach outputs and selected batch_y for processing/saving
