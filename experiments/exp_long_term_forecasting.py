@@ -235,6 +235,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     else:
                         # Get the full model output before selecting for evaluation
                         outputs_full = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        # <<< ADD DEBUG PRINT >>>
+                        print(f"DEBUG: outputs_full shape after model call: {outputs_full.shape}")
+                        # <<< END DEBUG PRINT >>>
 
                 # --- Select targets (Temp=1, SOC=2, Voltage=3) for evaluation during testing ---
                 target_indices = [1, 2, 3] # Indices for Temp, SOC, and Voltage
