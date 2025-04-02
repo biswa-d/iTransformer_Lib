@@ -37,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--noise_current', type=float, default=0.003, help='noise percentage for current (0.3% = 0.003)')
     parser.add_argument('--noise_temp', type=float, default=0.001, help='noise percentage for temperature (0.1% = 0.001)')
     parser.add_argument('--noise_soc', type=float, default=0.0002, help='noise percentage for SOC (0.02% = 0.0002)')
-    parser.add_argument('--use_noise', action='store_true', default=True, help='whether to inject noise during training')
+    parser.add_argument('--use_noise', action='store_true', default=False, help='whether to inject noise during training')
 
     # forecasting task
     parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
