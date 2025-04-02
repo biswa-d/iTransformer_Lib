@@ -191,7 +191,8 @@ class Dataset_ETT_minute(Dataset):
 class Dataset_Custom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='ETTh1.csv',
-                 target='OT', scale=True, timeenc=0, freq='h'):
+                 target='OT', scale=True, timeenc=0, freq='h',
+                 noise_voltage=0.005, noise_current=0.003, noise_temp=0.001, noise_soc=0.0002, use_noise=True):
         # size [seq_len, label_len, pred_len]
         # info
         if size == None:
@@ -206,41 +207,44 @@ class Dataset_Custom(Dataset):
         assert flag in ['train', 'test', 'val']
         type_map = {'train': 0, 'val': 1, 'test': 2}
         self.set_type = type_map[flag]
-
+        
         self.features = features
         self.target = target
         self.scale = scale
         self.timeenc = timeenc
         self.freq = freq
-
+        
+        # Noise parameters
+        self.noise_voltage = noise_voltage
+        self.noise_current = noise_current
+        self.noise_temp = noise_temp
+        self.noise_soc = noise_soc
+        self.use_noise = use_noise and (flag == 'train')  # Only inject noise during training
+        
         self.root_path = root_path
         self.data_path = data_path
         self.__read_data__()
 
     def __read_data__(self):
         self.scaler = StandardScaler()
-        df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
+        df_raw = pd.read_csv(os.path.join(self.root_path,
+                                          self.data_path))
 
+        '''
+        df_raw.columns: ['date', ...(other features), target feature]
+        '''
         cols = list(df_raw.columns)
         cols.remove(self.target)
         cols.remove('date')
         df_raw = df_raw[['date'] + cols + [self.target]]
-
-        # Train and validation splits
-        num_train = int(len(df_raw) * 0.8)
-        num_vali = len(df_raw) - num_train
-        border1s = [0, num_train - self.seq_len]  # Train and validation
-        border2s = [num_train, len(df_raw)]       # Train and validation
-
-        # Handle the test case separately
-        if self.set_type == 2:  # Test
-            print(f"Loading test file: {self.data_path}")
-            border1 = 0
-            border2 = len(df_raw)
-        else:
-            border1 = border1s[self.set_type]
-            border2 = border2s[self.set_type]
-
+        # print(cols)
+        num_train = int(len(df_raw) * 0.7)
+        num_test = int(len(df_raw) * 0.2)
+        num_vali = len(df_raw) - num_train - num_test
+        border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
+        border2s = [num_train, num_train + num_vali, len(df_raw)]
+        border1 = border1s[self.set_type]
+        border2 = border2s[self.set_type]
 
         if self.features == 'M' or self.features == 'MS':
             cols_data = df_raw.columns[1:]
@@ -268,7 +272,10 @@ class Dataset_Custom(Dataset):
             data_stamp = data_stamp.transpose(1, 0)
 
         self.data_x = data[border1:border2]
-        self.data_y = data[border1:border2]
+        if self.features == 'MS':
+            self.data_y = data[border1:border2]
+        else:
+            self.data_y = data[border1:border2]
         self.data_stamp = data_stamp
 
     def __getitem__(self, index):
@@ -281,6 +288,19 @@ class Dataset_Custom(Dataset):
         seq_y = self.data_y[r_begin:r_end]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
+
+        # Inject noise during training if enabled
+        if self.use_noise:
+            # Create noise for each feature
+            noise = np.zeros_like(seq_x)
+            # Assuming the columns are in order: Voltage, Current, Temp, SOC
+            noise[:, 0] = np.random.normal(0, self.noise_voltage, size=seq_x.shape[0])  # Voltage
+            noise[:, 1] = np.random.normal(0, self.noise_current, size=seq_x.shape[0])  # Current
+            noise[:, 2] = np.random.normal(0, self.noise_temp, size=seq_x.shape[0])     # Temp
+            noise[:, 3] = np.random.normal(0, self.noise_soc, size=seq_x.shape[0])      # SOC
+            
+            # Apply noise to the input sequence
+            seq_x = seq_x + noise
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 

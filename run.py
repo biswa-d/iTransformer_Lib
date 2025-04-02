@@ -32,6 +32,13 @@ if __name__ == '__main__':
                         help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
+    # noise injection parameters
+    parser.add_argument('--noise_voltage', type=float, default=0.005, help='noise percentage for voltage (0.5% = 0.005)')
+    parser.add_argument('--noise_current', type=float, default=0.003, help='noise percentage for current (0.3% = 0.003)')
+    parser.add_argument('--noise_temp', type=float, default=0.001, help='noise percentage for temperature (0.1% = 0.001)')
+    parser.add_argument('--noise_soc', type=float, default=0.0002, help='noise percentage for SOC (0.02% = 0.0002)')
+    parser.add_argument('--use_noise', action='store_true', default=True, help='whether to inject noise during training')
+
     # forecasting task
     parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
     parser.add_argument('--label_len', type=int, default=48, help='start token length') # no longer needed in inverted Transformers
