@@ -4,26 +4,26 @@
 SETTING_FILE_PATH=""
 
 # --- Configuration (Define defaults or allow overrides via arguments) ---
-# Defaults set to match the specific training run: setting_20250401_074730
-MODEL_ID="custom_small_noisy_small_seq"
+# Defaults set to match the specific training run: setting_20250329_094517
+MODEL_ID="custom_small_2"
 MODEL="iTransformer"
 DATA="custom"
 ROOT_PATH="./data/"
 TEST_DATA="lg_test.csv" # Test data path used in the run
 FEATURES="MS"
 TARGET="Voltage"
-SEQ_LEN=150
+SEQ_LEN=200
 LABEL_LEN=0
 PRED_LEN=1
 ENC_IN=3
 DEC_IN=3
 C_OUT=1
 D_MODEL=32
-N_HEADS=2
+N_HEADS=4
 E_LAYERS=2
 D_LAYERS=1
-D_FF=128
-MOVING_AVG=10
+D_FF=64
+MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
 BATCH_SIZE=100 # Test batch size used in the run
@@ -33,8 +33,8 @@ DROPOUT=0.35
 
 # Array to hold arguments not explicitly handled here but needed by run.py
 OTHER_ARGS=()
-# Add use_norm=True by default based on the run log
-OTHER_ARGS+=(--use_norm 1)
+# Add use_norm=True by default based on the run log, assuming run.py accepts it directly
+OTHER_ARGS+=(--use_norm)
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do

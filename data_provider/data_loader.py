@@ -303,19 +303,20 @@ class Dataset_Custom(Dataset):
 
         # Inject noise during training if enabled
         if self.use_noise:
-            # Create noise for feature columns only (seq_x)
+            # Create noise for each feature
             noise = np.zeros_like(seq_x)
-            # Apply noise based on correct feature order and parameters
-            # Assuming feature order in self.data_x is: Current, Temp, SOC
-            if seq_x.shape[1] > 0: # Check if Current feature exists
-                noise[:, 0] = np.random.normal(0, self.noise_current, size=seq_x.shape[0])
-            if seq_x.shape[1] > 1: # Check if Temp feature exists
-                noise[:, 1] = np.random.normal(0, self.noise_temp, size=seq_x.shape[0])
-            if seq_x.shape[1] > 2: # Check if SOC feature exists
-                noise[:, 2] = np.random.normal(0, self.noise_soc, size=seq_x.shape[0])
-            # Note: noise_voltage is not used here as Voltage is not in seq_x
+            # Apply noise based on correct feature order: Current, Temp, SOC, Voltage
+            # Ensure column indices exist before applying noise
+            if seq_x.shape[1] > 0:
+                noise[:, 0] = np.random.normal(0, self.noise_current, size=seq_x.shape[0]) # Current
+            if seq_x.shape[1] > 1:
+                noise[:, 1] = np.random.normal(0, self.noise_temp, size=seq_x.shape[0])    # Temp
+            if seq_x.shape[1] > 2:
+                noise[:, 2] = np.random.normal(0, self.noise_soc, size=seq_x.shape[0])     # SOC
+            if seq_x.shape[1] > 3:
+                noise[:, 3] = np.random.normal(0, self.noise_voltage, size=seq_x.shape[0]) # Voltage (Target)
             
-            # Apply noise to the input sequence (features only)
+            # Apply noise to the input sequence
             seq_x = seq_x + noise
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark
