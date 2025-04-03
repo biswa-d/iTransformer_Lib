@@ -160,7 +160,6 @@ python run.py --is_training 0 \
                --devices "$DEVICES" \
                --batch_size "$BATCH_SIZE" \
                --dropout "$DROPOUT" \
-               --inverse \
                "${OTHER_ARGS[@]}" # Pass any other args captured
 
 echo "Simulation script finished."

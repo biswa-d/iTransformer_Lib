@@ -155,8 +155,7 @@ python run.py --is_training 0 \\
                --factor "$FACTOR" \\
                --devices "$DEVICES" \\
                --batch_size "$BATCH_SIZE" \\
-               --dropout "$DROPOUT" \\
-               --inverse \\
+               --dropout "$DROPOUT" \
                "${OTHER_ARGS[@]}" # Pass any other args captured
 
 echo "Testing script finished."

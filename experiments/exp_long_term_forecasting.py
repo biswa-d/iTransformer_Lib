@@ -260,11 +260,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_y_numpy_selected = batch_y_numpy[:, -self.args.pred_len:, target_indices] # Select targets from numpy version
 
                 # Initialize pred and true with selected model outputs and selected batch_y values
+                # --- Since data is pre-scaled and internal scaling is off, these are scaled values ---
                 pred = outputs_np
-                true = batch_y_numpy_selected # These now contain Temp, SOC, and Voltage
+                true = batch_y_numpy_selected # These now contain scaled Temp, SOC, and Voltage
 
-                # Only rescale if both conditions are met
+                # --- This block will be skipped as test_data.scale is False ---
                 if test_data.scale and self.args.inverse:
+                    print("Performing inverse transform - THIS SHOULD NOT HAPPEN IF DATA IS PRE-SCALED")
                     # Fetch mean and std for the output columns
                     # Assuming scaler was fit on [Current, Temp, SOC, Voltage]
                     output_means = test_data.scaler.mean_[target_indices] # Now gets mean for Temp, SOC, Voltage
@@ -273,14 +275,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     # Rescale predictions and true values (update pred and true) - Broadcast across time dimension
                     pred = (outputs_np * output_stds) + output_means
                     true = (batch_y_numpy_selected * output_stds) + output_means
+                # --- End skipped block ---
 
-                    # print("Shape of rescaled predictions:", pred.shape)
-                    # print("Shape of rescaled true labels:", true.shape)
-
-                # Clamp predictions AFTER potential rescaling (apply column-wise if needed)
-                # pred = np.clip(pred, ...)
-
-                # Append to the results (preds/trues now have 3 columns)
+                # Append to the results (preds/trues now have 3 scaled columns)
                 preds.append(pred)
                 trues.append(true)
 
@@ -305,20 +302,20 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        # --- Adjust Metric Calculation and Saving for 3 Targets (Temp, SOC, Voltage) ---
-        # Calculate metrics for each target separately for clarity
-        mae_temp, mse_temp, rmse_temp, _, _ = metric(preds[:, :, 0], trues[:, :, 0]) # Metrics for Temp (index 0 in preds/trues)
-        mae_soc,  mse_soc,  rmse_soc,  _, _ = metric(preds[:, :, 1], trues[:, :, 1]) # Metrics for SOC (index 1 in preds/trues)
-        mae_volt, mse_volt, rmse_volt, _, _ = metric(preds[:, :, 2], trues[:, :, 2]) # Metrics for Voltage (index 2 in preds/trues)
+        # --- Adjust Metric Calculation and Saving for 3 Scaled Targets ---
+        # Calculate metrics for each target separately for clarity (Metrics are on Scaled Data)
+        mae_temp, mse_temp, rmse_temp, _, _ = metric(preds[:, :, 0], trues[:, :, 0]) # Scaled Temp
+        mae_soc,  mse_soc,  rmse_soc,  _, _ = metric(preds[:, :, 1], trues[:, :, 1]) # Scaled SOC
+        mae_volt, mse_volt, rmse_volt, _, _ = metric(preds[:, :, 2], trues[:, :, 2]) # Scaled Voltage
 
-        print(f'Temp MSE:{mse_temp:.7f}, MAE:{mae_temp:.7f}')
-        print(f'SOC  MSE:{mse_soc:.7f}, MAE:{mae_soc:.7f}')
-        print(f'Volt MSE:{mse_volt:.7f}, MAE:{mae_volt:.7f}') # <-- Uncommented
+        print(f'Scaled Temp MSE:{mse_temp:.7f}, MAE:{mae_temp:.7f}')
+        print(f'Scaled SOC  MSE:{mse_soc:.7f}, MAE:{mae_soc:.7f}')
+        print(f'Scaled Volt MSE:{mse_volt:.7f}, MAE:{mae_volt:.7f}')
         # Calculate combined/average metrics if desired (optional) - Now includes Voltage
         mae_combined = np.mean([mae_temp, mae_soc, mae_volt])
         mse_combined = np.mean([mse_temp, mse_soc, mse_volt])
         rmse_combined = np.mean([rmse_temp, rmse_soc, rmse_volt])
-        print(f'Avg MSE:{mse_combined:.7f}, MAE:{mae_combined:.7f}')
+        print(f'Avg Scaled MSE:{mse_combined:.7f}, MAE:{mae_combined:.7f}')
 
         # Calculate the number of trainable parameters
         num_parameters = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
@@ -326,26 +323,26 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         # Append metrics and model parameters to the results file - Adjust format
         with open("result_long_term_forecast.txt", 'a') as f:
-            f.write(setting + "  \\n")
-            f.write(f'mse_avg:{mse_combined:.7f}, mae_avg:{mae_combined:.7f}, rmse_avg:{rmse_combined:.7f}\\n')
-            # f.write(f'mse_curr:{mse_curr:.7f}, mae_curr:{mae_curr:.7f}, rmse_curr:{rmse_curr:.7f}\\n') # Current not evaluated
-            f.write(f'mse_temp:{mse_temp:.7f}, mae_temp:{mae_temp:.7f}, rmse_temp:{rmse_temp:.7f}\\n')
-            f.write(f'mse_soc:{mse_soc:.7f}, mae_soc:{mae_soc:.7f}, rmse_soc:{rmse_soc:.7f}\\n')
-            f.write(f'mse_volt:{mse_volt:.7f}, mae_volt:{mae_volt:.7f}, rmse_volt:{rmse_volt:.7f}\\n') # <-- Uncommented
-            f.write(f'parameters:{num_parameters}\\n')
-            f.write('\\n')
+            f.write(setting + " Scaled_Eval \n") # Indicate scaled evaluation
+            f.write(f'mse_avg_scaled:{mse_combined:.7f}, mae_avg_scaled:{mae_combined:.7f}, rmse_avg_scaled:{rmse_combined:.7f}\n')
+            # f.write(f'mse_curr:{mse_curr:.7f}, mae_curr:{mae_curr:.7f}, rmse_curr:{rmse_curr:.7f}\n') # Current not evaluated
+            f.write(f'mse_temp_scaled:{mse_temp:.7f}, mae_temp_scaled:{mae_temp:.7f}, rmse_temp_scaled:{rmse_temp:.7f}\n')
+            f.write(f'mse_soc_scaled:{mse_soc:.7f}, mae_soc_scaled:{mae_soc:.7f}, rmse_soc_scaled:{rmse_soc:.7f}\n')
+            f.write(f'mse_volt_scaled:{mse_volt:.7f}, mae_volt_scaled:{mae_volt:.7f}, rmse_volt_scaled:{rmse_volt:.7f}\n') # <-- Uncommented
+            f.write(f'parameters:{num_parameters}\n')
+            f.write('\n')
 
-        np.save(folder_path + 'metrics_avg.npy', np.array([mae_combined, mse_combined, rmse_combined]))
+        np.save(folder_path + 'metrics_avg_scaled.npy', np.array([mae_combined, mse_combined, rmse_combined]))
         # np.save(folder_path + 'metrics_curr.npy', np.array([mae_curr, mse_curr, rmse_curr]))
-        np.save(folder_path + 'metrics_temp.npy', np.array([mae_temp, mse_temp, rmse_temp]))
-        np.save(folder_path + 'metrics_soc.npy', np.array([mae_soc, mse_soc, rmse_soc]))
-        np.save(folder_path + 'metrics_volt.npy', np.array([mae_volt, mse_volt, rmse_volt])) # <-- Uncommented
+        np.save(folder_path + 'metrics_temp_scaled.npy', np.array([mae_temp, mse_temp, rmse_temp]))
+        np.save(folder_path + 'metrics_soc_scaled.npy', np.array([mae_soc, mse_soc, rmse_soc]))
+        np.save(folder_path + 'metrics_volt_scaled.npy', np.array([mae_volt, mse_volt, rmse_volt])) # <-- Uncommented
 
-        np.save(folder_path + 'pred.npy', preds) # preds contains Temp, SOC, and Voltage predictions
-        np.save(folder_path + 'true.npy', trues) # trues contains Temp, SOC, and Voltage ground truths
+        np.save(folder_path + 'pred_scaled.npy', preds) # preds contains scaled Temp, SOC, and Voltage predictions
+        np.save(folder_path + 'true_scaled.npy', trues) # trues contains scaled Temp, SOC, and Voltage ground truths
 
         # Save predictions and true values as CSV - Adjust columns
-        csv_file_path = os.path.join(folder_path, 'results.csv')
+        csv_file_path = os.path.join(folder_path, 'results_scaled.csv')
         # Reshape for CSV: each row is one time step
         preds_flat = preds.reshape(-1, preds.shape[-1]) # Shape: (N_samples*pred_len, 3)
         trues_flat = trues.reshape(-1, trues.shape[-1]) # Shape: (N_samples*pred_len, 3)
@@ -420,9 +417,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Simulation horizon: {horizon} steps")
 
         # Lists to store unscaled simulation results
-        simulated_T_unscaled = []
-        simulated_S_unscaled = []
-        simulated_V_unscaled = []
+        simulated_T_scaled = []
+        simulated_S_scaled = []
+        simulated_V_scaled = []
 
         # 4. Autoregressive Simulation Loop
         with torch.no_grad():
@@ -454,18 +451,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # Extract predicted T, S, V (scaled) - indices 1, 2, 3 relative to enc_in
                 predicted_TSV_scaled = predicted_step_scaled[:, pred_indices]
 
+                # --- Remove Inverse Transform Step ---
                 # c. Inverse transform/denormalize predictions
-                # Reshape for scaler: (num_samples, num_features) -> need (1, 3)
-                predicted_TSV_scaled_np = predicted_TSV_scaled.squeeze(0).cpu().numpy().reshape(1, -1)
-                # Use scaler fitted on potentially only test data!
-                means_TSV = scaler.mean_[pred_indices]
-                stds_TSV = scaler.scale_[pred_indices]
-                predicted_TSV_unscaled = (predicted_TSV_scaled_np * stds_TSV) + means_TSV
+                # predicted_TSV_scaled_np = predicted_TSV_scaled.squeeze(0).cpu().numpy().reshape(1, -1)
+                # means_TSV = scaler.mean_[pred_indices]
+                # stds_TSV = scaler.scale_[pred_indices]
+                # predicted_TSV_unscaled = (predicted_TSV_scaled_np * stds_TSV) + means_TSV
 
-                # d. Store unscaled predictions
-                simulated_T_unscaled.append(predicted_TSV_unscaled[0, 0]) # Temp is index 0 of TSV
-                simulated_S_unscaled.append(predicted_TSV_unscaled[0, 1]) # SOC is index 1 of TSV
-                simulated_V_unscaled.append(predicted_TSV_unscaled[0, 2]) # Voltage is index 2 of TSV
+                # d. Store SCALED predictions
+                # Convert tensor to numpy for storage
+                predicted_TSV_scaled_np = predicted_TSV_scaled.squeeze(0).cpu().numpy()
+                simulated_T_scaled.append(predicted_TSV_scaled_np[0]) # Index 0 of TSV is Temp
+                simulated_S_scaled.append(predicted_TSV_scaled_np[1]) # Index 1 of TSV is SOC
+                simulated_V_scaled.append(predicted_TSV_scaled_np[2]) # Index 2 of TSV is Voltage
 
                 # e. Get true Current for the next step (already scaled)
                 true_current_scaled_next = future_true_current_scaled[k] # This is a scalar
@@ -490,46 +488,49 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         print("Simulation loop finished.")
 
-        # 5. Save Simulation Results
+        # 5. Save Simulation Results (Scaled)
         sim_results_folder = './results/' + setting + '_simulation/'
         if not os.path.exists(sim_results_folder): os.makedirs(sim_results_folder)
 
-        simulated_T = np.array(simulated_T_unscaled)
-        simulated_S = np.array(simulated_S_unscaled)
-        simulated_V = np.array(simulated_V_unscaled)
+        simulated_T_scaled = np.array(simulated_T_scaled)
+        simulated_S_scaled = np.array(simulated_S_scaled)
+        simulated_V_scaled = np.array(simulated_V_scaled)
 
-        np.save(os.path.join(sim_results_folder, 'sim_pred_T.npy'), simulated_T)
-        np.save(os.path.join(sim_results_folder, 'sim_pred_S.npy'), simulated_S)
-        np.save(os.path.join(sim_results_folder, 'sim_pred_V.npy'), simulated_V)
-        np.save(os.path.join(sim_results_folder, 'sim_true_TSV.npy'), ground_truth_unscaled_TSV) # Save ground truth for easy loading
+        # Extract scaled ground truth for comparison
+        ground_truth_scaled_TSV = test_data.data_x[seq_len:, pred_indices]
 
-        # Save combined CSV
+        np.save(os.path.join(sim_results_folder, 'sim_pred_T_scaled.npy'), simulated_T_scaled)
+        np.save(os.path.join(sim_results_folder, 'sim_pred_S_scaled.npy'), simulated_S_scaled)
+        np.save(os.path.join(sim_results_folder, 'sim_pred_V_scaled.npy'), simulated_V_scaled)
+        np.save(os.path.join(sim_results_folder, 'sim_true_TSV_scaled.npy'), ground_truth_scaled_TSV)
+
+        # Save combined CSV (Scaled)
         sim_df = pd.DataFrame({
-            'Simulated_Temp': simulated_T, 'True_Temp': ground_truth_unscaled_TSV[:, 0],
-            'Simulated_SOC': simulated_S, 'True_SOC': ground_truth_unscaled_TSV[:, 1],
-            'Simulated_Voltage': simulated_V, 'True_Voltage': ground_truth_unscaled_TSV[:, 2]
+            'Simulated_Temp_Scaled': simulated_T_scaled, 'True_Temp_Scaled': ground_truth_scaled_TSV[:, 0],
+            'Simulated_SOC_Scaled': simulated_S_scaled, 'True_SOC_Scaled': ground_truth_scaled_TSV[:, 1],
+            'Simulated_Voltage_Scaled': simulated_V_scaled, 'True_Voltage_Scaled': ground_truth_scaled_TSV[:, 2]
         })
-        sim_csv_path = os.path.join(sim_results_folder, 'simulation_results.csv')
+        sim_csv_path = os.path.join(sim_results_folder, 'simulation_results_scaled.csv')
         sim_df.to_csv(sim_csv_path, index=False)
         print(f"Simulation results saved to: {sim_results_folder}")
 
-        # 6. Evaluate Simulation Metrics
-        mae_T, mse_T, rmse_T, _, _ = metric(simulated_T, ground_truth_unscaled_TSV[:, 0])
-        mae_S, mse_S, rmse_S, _, _ = metric(simulated_S, ground_truth_unscaled_TSV[:, 1])
-        mae_V, mse_V, rmse_V, _, _ = metric(simulated_V, ground_truth_unscaled_TSV[:, 2])
+        # 6. Evaluate Simulation Metrics (on Scaled Data)
+        mae_T, mse_T, rmse_T, _, _ = metric(simulated_T_scaled, ground_truth_scaled_TSV[:, 0])
+        mae_S, mse_S, rmse_S, _, _ = metric(simulated_S_scaled, ground_truth_scaled_TSV[:, 1])
+        mae_V, mse_V, rmse_V, _, _ = metric(simulated_V_scaled, ground_truth_scaled_TSV[:, 2])
 
-        print("\n--- Simulation Metrics ---")
-        print(f"Temp: MAE={mae_T:.7f}, MSE={mse_T:.7f}, RMSE={rmse_T:.7f}")
-        print(f"SOC:  MAE={mae_S:.7f}, MSE={mse_S:.7f}, RMSE={rmse_S:.7f}")
-        print(f"Volt: MAE={mae_V:.7f}, MSE={mse_V:.7f}, RMSE={rmse_V:.7f}")
+        print("\n--- Simulation Metrics (Scaled) ---")
+        print(f"Scaled Temp: MAE={mae_T:.7f}, MSE={mse_T:.7f}, RMSE={rmse_T:.7f}")
+        print(f"Scaled SOC:  MAE={mae_S:.7f}, MSE={mse_S:.7f}, RMSE={rmse_S:.7f}")
+        print(f"Scaled Volt: MAE={mae_V:.7f}, MSE={mse_V:.7f}, RMSE={rmse_V:.7f}")
 
         # Save metrics to file
         metrics_summary = {
-            'Temp': {'MAE': mae_T, 'MSE': mse_T, 'RMSE': rmse_T},
-            'SOC': {'MAE': mae_S, 'MSE': mse_S, 'RMSE': rmse_S},
-            'Voltage': {'MAE': mae_V, 'MSE': mse_V, 'RMSE': rmse_V}
+            'Temp_Scaled': {'MAE': mae_T, 'MSE': mse_T, 'RMSE': rmse_T},
+            'SOC_Scaled': {'MAE': mae_S, 'MSE': mse_S, 'RMSE': rmse_S},
+            'Voltage_Scaled': {'MAE': mae_V, 'MSE': mse_V, 'RMSE': rmse_V}
         }
-        with open(os.path.join(sim_results_folder, 'simulation_metrics.txt'), 'w') as f:
+        with open(os.path.join(sim_results_folder, 'simulation_metrics_scaled.txt'), 'w') as f:
             import json
             f.write(json.dumps(metrics_summary, indent=4))
         print("Simulation metrics saved.")

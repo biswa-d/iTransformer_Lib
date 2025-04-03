@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler
 from utils.timefeatures import time_features
 import warnings
 
@@ -210,7 +209,7 @@ class Dataset_Custom(Dataset):
         
         self.features = features
         self.target = target
-        self.scale = scale
+        self.scale = False
         self.timeenc = timeenc
         self.freq = freq
         
@@ -226,14 +225,18 @@ class Dataset_Custom(Dataset):
         self.__read_data__()
 
     def __read_data__(self):
-        self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
 
         # Determine feature columns (excluding target and date)
         feature_cols = list(df_raw.columns)
-        feature_cols.remove(self.target)
-        feature_cols.remove('date')
+        try:
+            feature_cols.remove(self.target)
+            feature_cols.remove('date')
+        except ValueError as e:
+            print(f"Error removing columns: {e}. Check target name ('{self.target}') and if 'date' column exists.")
+            print(f"Available columns: {list(df_raw.columns)}")
+            raise
         target_col = self.target
 
         # Rearrange df_raw to have features first, then target
@@ -243,31 +246,24 @@ class Dataset_Custom(Dataset):
         if self.features == 'M' or self.features == 'MS':
             cols_for_processing = feature_cols + [target_col]
             df_data_full = df_raw[cols_for_processing]
-        elif self.features == 'S': # Should not happen if target != 'OT'
+        elif self.features == 'S':
             df_data_full = df_raw[[self.target]]
         else:
              raise ValueError(f"Unsupported features type: {self.features}")
+
+        # <<< Data is pre-scaled, so directly use its values >>>
+        data_values = df_data_full.values
 
         # --- Adjust split logic based on flag ---
         if self.set_type == 2: # Test flag
             # Use the entire file for testing
             border1 = 0
             border2 = len(df_raw)
-            # Fit scaler on the entire test data (Suboptimal, but maintains current flow. Ideally, load trained scaler)
-            # This assumes the test set distribution is representative for scaling, which might not be true.
-            # A better approach would be to fit on the training set ('lg_train.csv') and save/load the scaler.
-            print("Warning: Fitting scaler on the test set during testing. Ideally, load the scaler fitted during training.")
-            self.scaler.fit(df_data_full.values)
-            data_scaled_full = self.scaler.transform(df_data_full.values)
+            print("Using full pre-scaled test data file.")
 
         else: # Train or Validation flag (set_type 0 or 1)
             # Use 80/20 split for train/validation
             num_train = int(len(df_raw) * 0.8)
-            # Correct border calculation:
-            # Train: index 0 to num_train
-            # Val: index num_train - seq_len to end (ensure val starts seq_len before split point for continuity if needed, or adjust as required)
-            # The original val border `num_train - self.seq_len` can lead to negative index if num_train < seq_len
-            # Let's make val start directly after train for simplicity unless overlap logic is critical.
             val_start_index = num_train
             border1s = [0, val_start_index]  # Start index for train, val
             border2s = [num_train, len(df_raw)] # End index for train, val
@@ -275,15 +271,12 @@ class Dataset_Custom(Dataset):
             border1 = border1s[self.set_type]
             border2 = border2s[self.set_type]
 
-            # Fit scaler ONLY on the training portion (first 80%)
-            train_data_for_scaling = df_data_full.iloc[border1s[0]:border2s[0]]
-            self.scaler.fit(train_data_for_scaling.values)
-            # Transform the entire dataframe using the fitted scaler
-            data_scaled_full = self.scaler.transform(df_data_full.values)
+            print(f"Using pre-scaled data. Train/Val split: {border1}-{border2}")
 
         # Assign data_x AND data_y based on the calculated borders for the current flag
-        self.data_x = data_scaled_full[border1:border2]
-        self.data_y = data_scaled_full[border1:border2]
+        # using the pre-scaled data_values
+        self.data_x = data_values[border1:border2]
+        self.data_y = data_values[border1:border2]
 
         # --- Time Stamp Processing ---
         # Ensure timestamps correspond to the selected data slice [border1:border2]
@@ -335,10 +328,16 @@ class Dataset_Custom(Dataset):
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
     def __len__(self):
-        return len(self.data_x) - self.seq_len - self.pred_len + 1
+        # Ensure length calculation handles cases where data might be shorter than seq_len + pred_len
+        length = len(self.data_x) - self.seq_len - self.pred_len + 1
+        return max(0, length) # Return 0 if length is negative
 
     def inverse_transform(self, data):
-        return self.scaler.inverse_transform(data)
+        # Since scaling is done externally, this method is no longer meaningful
+        # raise NotImplementedError("Data is pre-scaled externally. Inverse transform requires original scaling parameters.")
+        # Or simply return the data if evaluation is done in the scaled domain
+        print("Warning: inverse_transform called, but data is pre-scaled externally. Returning data as is.")
+        return data
 
 
 class Dataset_PEMS(Dataset):
