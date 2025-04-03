@@ -320,7 +320,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         # Save predictions and true values as CSV (only Voltage)
         print("--- Saving Results CSV --- ")
-        csv_file_path = os.path.join(folder_path, 'results_voltage_only.csv')
+        csv_file_path = os.path.join(folder_path, 'result_voltage_3input.csv')
         
         results_dict = {
             f'Prediction_{target_col}': voltage_preds.flatten(),
