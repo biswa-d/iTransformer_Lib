@@ -379,7 +379,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # Use flag='test' to get the dataset object configured for test data
         # We need direct access to its data_x, data_stamp, and scaler
         test_data, _ = self._get_data(flag='test', test_file=self.args.data_path)
-        scaler = test_data.scaler
+        # scaler = test_data.scaler # Removed: No longer using internal scaler
         # Note the warning about the scaler potentially being fit on test data
         print(f"Using test data file: {self.args.data_path}")
         print(f"Test data shape (scaled): {test_data.data_x.shape}")
@@ -405,10 +405,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # Data needed for the loop and final evaluation
         # True future currents (scaled) for input construction
         future_true_current_scaled = test_data.data_x[seq_len:, current_col_idx]
-        # True future T, S, V (unscaled) for evaluation
-        # Need to get unscaled data - we can inverse transform the relevant part of data_x
-        ground_truth_unscaled_full = scaler.inverse_transform(test_data.data_x)
-        ground_truth_unscaled_TSV = ground_truth_unscaled_full[seq_len:, pred_indices]
+        # True future T, S, V (scaled) for evaluation
+        ground_truth_scaled_TSV = test_data.data_x[seq_len:, pred_indices]
         # Time features for the prediction steps
         future_marks = torch.from_numpy(test_data.data_stamp[seq_len:]).float()
 
@@ -497,7 +495,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         simulated_V_scaled = np.array(simulated_V_scaled)
 
         # Extract scaled ground truth for comparison
-        ground_truth_scaled_TSV = test_data.data_x[seq_len:, pred_indices]
+        # ground_truth_scaled_TSV = test_data.data_x[seq_len:, pred_indices] # Already extracted above
 
         np.save(os.path.join(sim_results_folder, 'sim_pred_T_scaled.npy'), simulated_T_scaled)
         np.save(os.path.join(sim_results_folder, 'sim_pred_S_scaled.npy'), simulated_S_scaled)
