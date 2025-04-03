@@ -199,177 +199,134 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         print(f"Testing with custom test file: {test_file}")
         test_data, test_loader = self._get_data(flag='test', test_file=test_file)
-        print(f"Test data shape: {test_data.data_x.shape}")
+        
+        # Now data_x has 3 features, data_y has 4 (3 features + target V)
+        print(f"Test data_x shape (Input features): {test_data.data_x.shape}") 
+        print(f"Test data_y shape (Features + Target): {test_data.data_y.shape}") 
         print(f"Test data length: {len(test_data)}")
         print(f"Batch size: {self.args.batch_size}")
         print(f"Number of batches: {len(test_loader)}")
         
         if test:
             print('loading model')
-            self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
+            # Ensure model path is correct
+            model_path = os.path.join('./checkpoints/', setting, 'checkpoint.pth') 
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Checkpoint not found at {model_path}")
+            self.model.load_state_dict(torch.load(model_path))
 
-        preds = []
-        trues = []
+        # Store predictions (only for Voltage) and true values (only for Voltage)
+        voltage_preds = []
+        voltage_trues = []
+        
         folder_path = './test_results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        # Get the feature order and target
-        feature_order = test_data.feature_cols  # This will be [Current, SOC, Voltage] when Temp is target
-        target_col = test_data.target  # This will be 'Temp' or whatever is specified
-        
-        # Create a mapping of feature names to their indices in the model's output
-        # The model always outputs predictions in the order: features first, then target
-        feature_to_idx = {feature: idx for idx, feature in enumerate(feature_order)}
-        feature_to_idx[target_col] = len(feature_order)  # Target is always last
+        # Get the feature order (now only 3 input features)
+        feature_order_input = test_data.feature_cols 
+        target_col = self.args.target # Should be 'Voltage'
+        print(f"Input feature order: {feature_order_input}")
+        print(f"Target column: {target_col}")
+
+        # Find the index of the target column in the original data ordering (used by data_y)
+        # Assumes data_y columns are [feature1, feature2, feature3, target]
+        target_idx_in_y = len(feature_order_input) # Target is the last column in data_y
 
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(test_loader):
+                # batch_x shape: [B, L, 3] (SOC, I, T - or whichever order)
+                # batch_y shape: [B, L+pred_len, 4] (SOC, I, T, V)
                 print(f"\nProcessing batch {i+1}/{len(test_loader)}")
                 print(f"batch_x shape: {batch_x.shape}")
                 print(f"batch_y shape: {batch_y.shape}")
                 
                 batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float().to(self.device)
+                batch_y = batch_y.float().to(self.device) # Contains true V
+                batch_x_mark = batch_x_mark.float().to(self.device)
+                batch_y_mark = batch_y_mark.float().to(self.device)
 
-                if 'PEMS' in self.args.data or 'Solar' in self.args.data:
-                    batch_x_mark = None
-                    batch_y_mark = None
-                else:
-                    batch_x_mark = batch_x_mark.float().to(self.device)
-                    batch_y_mark = batch_y_mark.float().to(self.device)
+                # Decoder input: For iTransformer, label_len=0, pred_len=1 usually
+                # Still need a placeholder, shape depends on model's internal needs for y_mark
+                # Let's assume label_len=0 for simplicity as often used with iTransformer
+                dec_inp = torch.zeros((batch_x.size(0), self.args.pred_len, batch_x.size(2)), device=self.device).float()
+                # Note: The dec_inp size matches batch_x features (3), but the model predicts c_out (1) features.
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                
                 # Get model outputs
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                         if isinstance(outputs, tuple): outputs = outputs[0]
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
-
-                print(f"Model outputs shape: {outputs.shape}")
-
-                # Select predictions and true values for each feature
-                pred_dict = {}
-                true_dict = {}
+                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    if isinstance(outputs, tuple): outputs = outputs[0]
                 
-                # Process features in their actual order
-                for feature in feature_order + [target_col]:
-                    idx = feature_to_idx[feature]
-                    pred_dict[feature] = outputs[:, -self.args.pred_len:, idx].detach().cpu().numpy()
-                    true_dict[feature] = batch_y[:, -self.args.pred_len:, idx].detach().cpu().numpy()
+                # Model output shape: [B, pred_len, c_out] - expecting c_out=1 (Voltage)
+                print(f"Model outputs shape: {outputs.shape}") 
+                
+                # --- Verification --- 
+                if outputs.shape[-1] != 1:
+                     print(f"Warning: Model output dimension ({outputs.shape[-1]}) doesn't match expected c_out=1 for Voltage prediction.")
+                     # Handle this case appropriately - maybe take the first column? Or raise error?
+                     # Taking first column for now:
+                     pred_v = outputs[:, -self.args.pred_len:, 0:1].detach().cpu() 
+                else:
+                     pred_v = outputs[:, -self.args.pred_len:, :].detach().cpu() # Shape [B, pred_len, 1]
+                
+                # Get true voltage from batch_y 
+                # Target is the last column in the original data order used for batch_y
+                true_v = batch_y[:, -self.args.pred_len:, target_idx_in_y:].detach().cpu() # Shape [B, pred_len, 1]
 
-                # Stack predictions and true values in the correct order
-                pred = np.stack([pred_dict[feature] for feature in feature_order + [target_col]], axis=-1)
-                true = np.stack([true_dict[feature] for feature in feature_order + [target_col]], axis=-1)
+                print(f"Pred Voltage shape: {pred_v.shape}")
+                print(f"True Voltage shape: {true_v.shape}")
 
-                print(f"Pred shape: {pred.shape}")
-                print(f"True shape: {true.shape}")
+                voltage_preds.append(pred_v.numpy())
+                voltage_trues.append(true_v.numpy())
 
-                preds.append(pred)
-                trues.append(true)
-
-        preds = np.concatenate(preds, axis=0)
-        trues = np.concatenate(trues, axis=0)
+        voltage_preds = np.concatenate(voltage_preds, axis=0)
+        voltage_trues = np.concatenate(voltage_trues, axis=0)
         print('\nFinal shapes after concatenation:')
-        print('preds shape:', preds.shape)
-        print('trues shape:', trues.shape)
+        print('voltage_preds shape:', voltage_preds.shape)
+        print('voltage_trues shape:', voltage_trues.shape)
         
-        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-        print('Final shapes after reshape:')
-        print('preds shape:', preds.shape)
-        print('trues shape:', trues.shape)
+        # Reshape to [Samples, pred_len] if pred_len=1, or [Samples*pred_len, 1] for metric calc
+        voltage_preds = voltage_preds.reshape(-1, voltage_preds.shape[-1])
+        voltage_trues = voltage_trues.reshape(-1, voltage_trues.shape[-1])
+        print('Final shapes after reshape for metrics:')
+        print('voltage_preds shape:', voltage_preds.shape)
+        print('voltage_trues shape:', voltage_trues.shape)
 
-        # result save
+        # --- Result saving --- 
         folder_path = './results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        # Define a canonical order for saving results consistently
-        canonical_save_order = ['Current', 'SOC', 'Temp', 'Voltage']
+        # Calculate metrics ONLY for Voltage
+        mae, mse, rmse, _, _ = metric(voltage_preds, voltage_trues)
+        print("--- Metrics Calculation (Voltage Only) ---")
+        print(f'Voltage MSE:{mse:.7f}, MAE:{mae:.7f}')
 
-        # Calculate metrics for each feature using the canonical order for reporting
-        metrics = {}
-        print("--- Metrics Calculation ---")
-        for feature in canonical_save_order:
-            if feature in feature_to_idx: # Check if the feature exists in the current run
-                idx = feature_to_idx[feature]
-                mae, mse, rmse, _, _ = metric(preds[:, :, idx], trues[:, :, idx])
-                metrics[feature] = {'mae': mae, 'mse': mse, 'rmse': rmse}
-                print(f'{feature} -> Index in preds/trues: {idx}, MSE:{mse:.7f}, MAE:{mae:.7f}')
-            else:
-                # Use double quotes for the f-string to allow the inner single quote
-                print(f"{feature} not found in this run's features/target.")
-                # Corrected dictionary assignment without unnecessary backslashes
-                metrics[feature] = {'mae': np.nan, 'mse': np.nan, 'rmse': np.nan} # Placeholder
-
-        # Calculate combined metrics (only for features present in the run)
-        valid_features = [f for f in canonical_save_order if f in feature_to_idx]
-        # Ensure np.mean gets a list of valid numbers (filter NaNs if any were added)
-        mae_list = [metrics[f]['mae'] for f in valid_features if not np.isnan(metrics[f]['mae'])]
-        mse_list = [metrics[f]['mse'] for f in valid_features if not np.isnan(metrics[f]['mse'])]
-        rmse_list = [metrics[f]['rmse'] for f in valid_features if not np.isnan(metrics[f]['rmse'])]
-        
-        mae_combined = np.mean(mae_list) if mae_list else np.nan
-        mse_combined = np.mean(mse_list) if mse_list else np.nan
-        rmse_combined = np.mean(rmse_list) if rmse_list else np.nan
-        print(f'Avg MSE (over {valid_features}):{mse_combined:.7f}, MAE:{mae_combined:.7f}')
-
-        # Save metrics in canonical order
+        # Save metrics
         print("--- Saving Metrics --- ")
         with open("result_long_term_forecast.txt", 'a') as f:
             f.write(setting + " \n")
-            f.write(f'mse_avg:{mse_combined:.7f}, mae_avg:{mae_combined:.7f}, rmse_avg:{rmse_combined:.7f}\n')
-            for feature in canonical_save_order:
-                # Use lowercase for file consistency
-                f.write(f'mse_{feature.lower()}:{metrics[feature]["mse"]:.7f}, mae_{feature.lower()}:{metrics[feature]["mae"]:.7f}, rmse_{feature.lower()}:{metrics[feature]["rmse"]:.7f}\n')
+            # Only write voltage metrics
+            f.write(f'mse_voltage:{mse:.7f}, mae_voltage:{mae:.7f}, rmse_voltage:{rmse:.7f}\n')
             f.write('\n')
         print(f"Metrics saved to result_long_term_forecast.txt")
 
-        # Save predictions and true values as CSV in canonical order
+        # Save predictions and true values as CSV (only Voltage)
         print("--- Saving Results CSV --- ")
-        csv_file_path = os.path.join(folder_path, 'results.csv')
-        preds_flat = preds.reshape(-1, preds.shape[-1])
-        trues_flat = trues.reshape(-1, trues.shape[-1])
-
-        # Create results dictionary using canonical order for columns
-        results_dict = {}
-        print(f"Feature to Index Map used: {feature_to_idx}")
-        for feature in canonical_save_order:
-            if feature in feature_to_idx:
-                idx = feature_to_idx[feature]
-                results_dict[f'Prediction_{feature}'] = preds_flat[:, idx]
-                results_dict[f'True_{feature}'] = trues_flat[:, idx]
-                print(f"Saving {feature} (Index {idx}) to CSV columns.")
-            else:
-                # Handle cases where a feature might not be present (e.g., univariate runs)
-                results_dict[f'Prediction_{feature}'] = [np.nan] * len(preds_flat)
-                results_dict[f'True_{feature}'] = [np.nan] * len(trues_flat)
-                print(f"{feature} not in model output, saving NaNs to CSV columns.")
-
+        csv_file_path = os.path.join(folder_path, 'results_voltage_only.csv')
+        
+        results_dict = {
+            f'Prediction_{target_col}': voltage_preds.flatten(),
+            f'True_{target_col}': voltage_trues.flatten()
+        }
         results_df = pd.DataFrame(results_dict)
-        # Define the exact desired column order for the CSV
-        desired_csv_columns = []
-        for feature in canonical_save_order:
-            desired_csv_columns.append(f'Prediction_{feature}')
-            desired_csv_columns.append(f'True_{feature}')
-        # Filter to ensure we only try to order columns that exist in the dataframe
-        existing_desired_columns = [col for col in desired_csv_columns if col in results_df.columns]
-        results_df = results_df[existing_desired_columns] # Reorder the dataframe columns
-
         results_df.to_csv(csv_file_path, index=False)
-        print(f'Results saved to: {csv_file_path} with columns in order: {list(results_df.columns)}')
+        print(f'Voltage results saved to: {csv_file_path}')
 
         return
 

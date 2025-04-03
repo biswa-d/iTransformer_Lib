@@ -209,15 +209,17 @@ class Dataset_Custom(Dataset):
         
         self.features = features
         self.target = target
-        self.scale = False
+        self.scale = False # Data is pre-scaled
         self.timeenc = timeenc
         self.freq = freq
         
         # Noise parameters
-        self.noise_voltage = noise_voltage
-        self.noise_current = noise_current
-        self.noise_temp = noise_temp
-        self.noise_soc = noise_soc
+        self.noise_map = { # Map feature names to noise levels
+            'Voltage': noise_voltage,
+            'Current': noise_current,
+            'Temp': noise_temp,
+            'SOC': noise_soc
+        }
         self.use_noise = use_noise and (flag == 'train')  # Only inject noise during training
         
         self.root_path = root_path
@@ -228,62 +230,37 @@ class Dataset_Custom(Dataset):
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
 
-        # Get all columns except date and target
-        all_cols = list(df_raw.columns)
-        all_cols.remove('date')
-        all_cols.remove(self.target)
-        
-        # Maintain the original order of features
-        # For example, if original order is [date, Voltage, Current, Temp, SOC]
-        # and target is Temp, then feature_cols will be [Voltage, Current, SOC]
-        # in their original order
+        # Identify feature columns (excluding date and target)
         feature_cols = [col for col in df_raw.columns if col not in ['date', self.target]]
-        
-        # Rearrange df_raw to have features first, then target
-        # This ensures consistent ordering for model input
-        df_raw = df_raw[['date'] + feature_cols + [self.target]]
+        self.feature_cols = feature_cols # Store the names of the INPUT features
 
-        # Store feature columns for reference
-        self.feature_cols = feature_cols
+        # Define columns for input (x) and target sequence base (y)
+        cols_for_x = feature_cols
+        cols_for_y = feature_cols + [self.target] # y needs the target column for slicing later
 
-        # Select all numerical columns (features + target) for processing
-        if self.features == 'M' or self.features == 'MS':
-            cols_for_processing = feature_cols + [self.target]
-            df_data_full = df_raw[cols_for_processing]
-        elif self.features == 'S':
-            df_data_full = df_raw[[self.target]]
-        else:
-             raise ValueError(f"Unsupported features type: {self.features}")
-
-        # <<< Data is pre-scaled, so directly use its values >>>
-        data_values = df_data_full.values
+        # Get data values for x and y
+        data_values_x = df_raw[cols_for_x].values
+        data_values_y = df_raw[cols_for_y].values
 
         # --- Adjust split logic based on flag ---
         if self.set_type == 2: # Test flag
-            # Use the entire file for testing
             border1 = 0
             border2 = len(df_raw)
             print("Using full pre-scaled test data file.")
-
-        else: # Train or Validation flag (set_type 0 or 1)
-            # Use 80/20 split for train/validation
+        else: # Train or Validation flag
             num_train = int(len(df_raw) * 0.8)
             val_start_index = num_train
-            border1s = [0, val_start_index]  # Start index for train, val
-            border2s = [num_train, len(df_raw)] # End index for train, val
-
+            border1s = [0, val_start_index]
+            border2s = [num_train, len(df_raw)]
             border1 = border1s[self.set_type]
             border2 = border2s[self.set_type]
-
             print(f"Using pre-scaled data. Train/Val split: {border1}-{border2}")
 
-        # Assign data_x AND data_y based on the calculated borders for the current flag
-        # using the pre-scaled data_values
-        self.data_x = data_values[border1:border2]
-        self.data_y = data_values[border1:border2]
+        # Assign data_x (only input features) and data_y (features + target)
+        self.data_x = data_values_x[border1:border2]
+        self.data_y = data_values_y[border1:border2]
 
-        # --- Time Stamp Processing ---
-        # Ensure timestamps correspond to the selected data slice [border1:border2]
+        # --- Time Stamp Processing (remains the same) ---
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
         if self.timeenc == 0:
@@ -304,27 +281,23 @@ class Dataset_Custom(Dataset):
         r_begin = s_end - self.label_len
         r_end = r_begin + self.label_len + self.pred_len
 
-        # seq_x contains only feature columns now
+        # seq_x now contains only the 3 input features
         seq_x = self.data_x[s_begin:s_end]
-        # seq_y contains feature and target columns
+        # seq_y contains the 3 features + 1 target feature (V)
         seq_y = self.data_y[r_begin:r_end]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
 
         # Inject noise during training if enabled
         if self.use_noise:
-            # Create noise for each feature (now 4 columns in seq_x)
-            noise = np.zeros_like(seq_x)
-            # Apply noise based on correct feature order: Current, Temp, SOC, Voltage
-            # Ensure column indices exist before applying noise
-            if seq_x.shape[1] > 0:
-                noise[:, 0] = np.random.normal(0, self.noise_current, size=seq_x.shape[0]) # Current
-            if seq_x.shape[1] > 1:
-                noise[:, 1] = np.random.normal(0, self.noise_temp, size=seq_x.shape[0])    # Temp
-            if seq_x.shape[1] > 2:
-                noise[:, 2] = np.random.normal(0, self.noise_soc, size=seq_x.shape[0])     # SOC
-            if seq_x.shape[1] > 3:
-                noise[:, 3] = np.random.normal(0, self.noise_voltage, size=seq_x.shape[0]) # Voltage (Target)
+            noise = np.zeros_like(seq_x) # Noise shape matches seq_x (3 features)
+            # Apply noise based on the actual feature names stored in self.feature_cols
+            for i, feature_name in enumerate(self.feature_cols):
+                if feature_name in self.noise_map:
+                    noise_std = self.noise_map[feature_name]
+                    noise[:, i] = np.random.normal(0, noise_std, size=seq_x.shape[0])
+                else:
+                     print(f"Warning: Noise level not defined for feature '{feature_name}'") # Should not happen with V,I,T,SOC
             
             # Apply noise to the input sequence
             seq_x = seq_x + noise
@@ -332,14 +305,10 @@ class Dataset_Custom(Dataset):
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
     def __len__(self):
-        # Ensure length calculation handles cases where data might be shorter than seq_len + pred_len
         length = len(self.data_x) - self.seq_len - self.pred_len + 1
-        return max(0, length) # Return 0 if length is negative
+        return max(0, length) 
 
     def inverse_transform(self, data):
-        # Since scaling is done externally, this method is no longer meaningful
-        # raise NotImplementedError("Data is pre-scaled externally. Inverse transform requires original scaling parameters.")
-        # Or simply return the data if evaluation is done in the scaled domain
         print("Warning: inverse_transform called, but data is pre-scaled externally. Returning data as is.")
         return data
 
