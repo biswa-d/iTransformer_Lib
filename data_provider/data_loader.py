@@ -231,16 +231,26 @@ class Dataset_Custom(Dataset):
                                           self.data_path))
 
         # Identify feature columns (excluding date and target)
-        feature_cols = [col for col in df_raw.columns if col not in ['date', self.target]]
+        print(f"Reading data with target: {self.target}") # Debug print
+        all_columns = list(df_raw.columns)
+        print(f"All columns found: {all_columns}") # Debug print
+        feature_cols = [col for col in all_columns if col not in ['date', self.target]]
         self.feature_cols = feature_cols # Store the names of the INPUT features
+        print(f"Input features identified (cols_for_x): {self.feature_cols}") # Debug print
+        print(f"Number of input features: {len(self.feature_cols)}") # Debug print
 
         # Define columns for input (x) and target sequence base (y)
-        cols_for_x = feature_cols
-        cols_for_y = feature_cols + [self.target] # y needs the target column for slicing later
+        cols_for_x = self.feature_cols
+        cols_for_y = self.feature_cols + [self.target] # y needs the target column for slicing later
+        print(f"Columns for Y (target base): {cols_for_y}") # Debug print
 
         # Get data values for x and y
-        data_values_x = df_raw[cols_for_x].values
-        data_values_y = df_raw[cols_for_y].values
+        try:
+            data_values_x = df_raw[cols_for_x].values
+            data_values_y = df_raw[cols_for_y].values
+        except KeyError as e:
+             print(f"Error selecting columns: {e}. Check column names in CSV and target variable.")
+             raise
 
         # --- Adjust split logic based on flag ---
         if self.set_type == 2: # Test flag
@@ -259,6 +269,8 @@ class Dataset_Custom(Dataset):
         # Assign data_x (only input features) and data_y (features + target)
         self.data_x = data_values_x[border1:border2]
         self.data_y = data_values_y[border1:border2]
+        print(f"Shape of self.data_x (input features): {self.data_x.shape}") # Debug print
+        print(f"Shape of self.data_y (features + target): {self.data_y.shape}") # Debug print
 
         # --- Time Stamp Processing (remains the same) ---
         df_stamp = df_raw[['date']][border1:border2]
@@ -281,23 +293,26 @@ class Dataset_Custom(Dataset):
         r_begin = s_end - self.label_len
         r_end = r_begin + self.label_len + self.pred_len
 
-        # seq_x now contains only the 3 input features
+        # seq_x now contains only the N input features (expecting N=3)
         seq_x = self.data_x[s_begin:s_end]
-        # seq_y contains the 3 features + 1 target feature (V)
+        # seq_y contains the N features + 1 target feature (V)
         seq_y = self.data_y[r_begin:r_end]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
 
         # Inject noise during training if enabled
         if self.use_noise:
-            noise = np.zeros_like(seq_x) # Noise shape matches seq_x (3 features)
+            noise = np.zeros_like(seq_x) # Noise shape matches seq_x (N features)
             # Apply noise based on the actual feature names stored in self.feature_cols
             for i, feature_name in enumerate(self.feature_cols):
-                if feature_name in self.noise_map:
-                    noise_std = self.noise_map[feature_name]
-                    noise[:, i] = np.random.normal(0, noise_std, size=seq_x.shape[0])
+                if i < noise.shape[1]: # Ensure index is valid for noise array
+                    if feature_name in self.noise_map:
+                        noise_std = self.noise_map[feature_name]
+                        noise[:, i] = np.random.normal(0, noise_std, size=seq_x.shape[0])
+                    else:
+                        print(f"Warning: Noise level not defined for feature '{feature_name}'")
                 else:
-                     print(f"Warning: Noise level not defined for feature '{feature_name}'") # Should not happen with V,I,T,SOC
+                    print(f"Warning: Index {i} for feature '{feature_name}' out of bounds for noise array shape {noise.shape}")
             
             # Apply noise to the input sequence
             seq_x = seq_x + noise

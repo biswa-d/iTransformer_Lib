@@ -60,30 +60,29 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     batch_y_mark = batch_y_mark.float().to(self.device)
 
                 # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                dec_inp = torch.zeros((batch_x.size(0), self.args.pred_len, batch_x.size(2)), device=self.device).float()
+
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
-                else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                    else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
-                f_dim = -1 if self.args.features == 'MS' else 0
-                outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                        if isinstance(outputs, tuple): outputs = outputs[0]
+                else:
+                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    if isinstance(outputs, tuple): outputs = outputs[0]
 
-                pred = outputs.detach().cpu()
-                true = batch_y.detach().cpu()
-
+                # --- Select Target for Loss Calculation --- 
+                pred = outputs # Shape: [B, pred_len, 1]
+                
+                # Extract the true target voltage from batch_y
+                # batch_y shape is [B, L+pred_len, 4] or similar depending on label_len
+                # Target Voltage is the last column
+                true = batch_y[:, -self.args.pred_len:, -1:].to(self.device) # Shape: [B, pred_len, 1]
+                # --- End Selection --- 
+                
                 loss = criterion(pred, true)
 
-                total_loss.append(loss)
+                total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
@@ -126,32 +125,31 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     batch_y_mark = batch_y_mark.float().to(self.device)
 
                 # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                dec_inp = torch.zeros((batch_x.size(0), self.args.pred_len, batch_x.size(2)), device=self.device).float()
 
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
-
-                        f_dim = -1 if self.args.features == 'MS' else 0
-                        outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                        batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
-                        loss = criterion(outputs, batch_y)
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        if isinstance(outputs, tuple): outputs = outputs[0]
+                        
+                        # --- Select Target for Loss Calculation --- 
+                        pred = outputs # Shape: [B, pred_len, 1]
+                        true = batch_y[:, -self.args.pred_len:, -1:].to(self.device) # Shape: [B, pred_len, 1]
+                        # --- End Selection --- 
+                        
+                        loss = criterion(pred, true)
                         train_loss.append(loss.item())
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    if isinstance(outputs, tuple): outputs = outputs[0]
+                    
+                    # --- Select Target for Loss Calculation --- 
+                    pred = outputs # Shape: [B, pred_len, 1]
+                    true = batch_y[:, -self.args.pred_len:, -1:].to(self.device) # Shape: [B, pred_len, 1]
+                    # --- End Selection --- 
 
-                    f_dim = -1 if self.args.features == 'MS' else 0
-                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
-                    loss = criterion(outputs, batch_y)
+                    loss = criterion(pred, true)
                     train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
