@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Argument Parsing ---
-SETTING_FILE_PATH=""
+SETTING_FILE_PATH="Logs/setting_20250402_194252.txt"
 
 # --- Configuration (Define defaults or allow overrides via arguments) ---
 # Defaults set to match the specific training run: setting_20250329_094517

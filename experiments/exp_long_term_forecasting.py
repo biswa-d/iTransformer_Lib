@@ -481,7 +481,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # g. Update the history window (append new, remove oldest)
                 # Append along the time dimension (dim 0)
                 current_window_x = torch.cat([current_window_x[1:], next_state_scaled.unsqueeze(0)], dim=0)
-                current_window_mark = torch.cat([current_window_mark[1:], next_step_mark], dim=0)
+                # <<< Ensure next_step_mark is also on the correct device >>>
+                current_window_mark = torch.cat([current_window_mark[1:], next_step_mark.to(self.device)], dim=0)
 
                 # Print progress (optional)
                 if (k + 1) % 1000 == 0:
