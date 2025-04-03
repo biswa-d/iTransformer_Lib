@@ -449,6 +449,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # Extract predicted T, S, V (scaled) - indices 1, 2, 3 relative to enc_in
                 predicted_TSV_scaled = predicted_step_scaled[:, pred_indices]
 
+                # <<< Clamp scaled predictions to [0, 1] >>>
+                predicted_TSV_scaled = torch.clamp(predicted_TSV_scaled, min=0.0, max=1.0)
+
                 # --- Remove Inverse Transform Step ---
                 # c. Inverse transform/denormalize predictions
                 # predicted_TSV_scaled_np = predicted_TSV_scaled.squeeze(0).cpu().numpy().reshape(1, -1)
