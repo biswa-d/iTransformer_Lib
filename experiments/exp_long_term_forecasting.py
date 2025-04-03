@@ -472,9 +472,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 # f. Construct the *next* state vector (scaled) for the history window
                 # Combine true scaled Current with predicted scaled T, S, V
-                # Ensure true_current_scaled_next is correctly shaped (1,)
+                # Ensure true_current_scaled_next is correctly shaped (1,) and is float32
                 next_state_scaled = torch.cat([
-                    torch.tensor([true_current_scaled_next], device=self.device), # True C
+                    torch.tensor([true_current_scaled_next], device=self.device).float(), # <<< Cast to float32
                     predicted_TSV_scaled.squeeze(0).to(self.device) # Predicted T, S, V
                 ], dim=0) # Shape should be (enc_in,)
 
