@@ -236,7 +236,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         # Get the full model output before selecting for evaluation
                         outputs_full = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                         # <<< ADD DEBUG PRINT >>>
-                        print(f"DEBUG: outputs_full shape after model call: {outputs_full.shape}")
+                        #print(f"DEBUG: outputs_full shape after model call: {outputs_full.shape}")
                         # <<< END DEBUG PRINT >>>
 
                 # --- Select targets (Temp=1, SOC=2, Voltage=3) for evaluation during testing ---
@@ -245,8 +245,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 outputs_selected = outputs_full[:, -self.args.pred_len:, target_indices]
 
                 # <<< ADD DEBUG PRINT >>>
-                print(f"DEBUG: batch_y shape on device before selection: {batch_y.shape}")
-                print(f"DEBUG: target_indices: {target_indices}")
+                #print(f"DEBUG: batch_y shape on device before selection: {batch_y.shape}")
+                #print(f"DEBUG: target_indices: {target_indices}")
                 # <<< END DEBUG PRINT >>>
 
                 batch_y_selected = batch_y[:, -self.args.pred_len:, target_indices].to(self.device)
@@ -364,6 +364,24 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         return
 
+    def simulate(self, setting):
+        # TODO: Implement autoregressive simulation logic
+        # 1. Load model checkpoint based on 'setting'
+        # 2. Get test data (use flag='test', maybe use a dataloader with batch_size=1)
+        # 3. Get initial seed sequence (first seq_len points)
+        # 4. Loop for the desired simulation horizon:
+        #    a. Prepare model inputs (current window of C, T, S, V and time features)
+        #    b. Predict the next step (T, S, V)
+        #    c. Inverse transform/denormalize predictions
+        #    d. Store predictions
+        #    e. Get true Current for the next step
+        #    f. Construct the next state (True C + Predicted T, S, V)
+        #    g. Update the history window (add new state, remove oldest)
+        #    h. Handle normalization/scaling for the next input
+        # 5. Save simulation results (predicted T, S, V)
+        # 6. Optionally, load true T, S, V for the horizon and calculate metrics
+        print(f"Simulation method called for setting: {setting} - Not implemented yet.")
+        pass
 
     def predict(self, setting, load=False):
         pred_data, pred_loader = self._get_data(flag='pred')

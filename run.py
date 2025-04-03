@@ -64,6 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--activation', type=str, default='gelu', help='activation')
     parser.add_argument('--output_attention', action='store_true', help='whether to output attention in ecoder')
     parser.add_argument('--do_predict', action='store_true', help='whether to predict unseen future data')
+    parser.add_argument('--do_simulate', action='store_true', help='whether to run autoregressive simulation')
 
     # optimization
     parser.add_argument('--num_workers', type=int, default=1, help='data loader num workers')
@@ -183,6 +184,11 @@ if __name__ == '__main__':
              exit(1)
 
         exp = Exp(args)  # set experiments
-        print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        exp.test(setting, test=1)
+        # Decide whether to run test or simulation
+        if args.do_simulate:
+            print('>>>>>>>simulating : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+            exp.simulate(setting) # Assuming simulate method loads the model
+        else:
+            print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+            exp.test(setting, test=1)
         torch.cuda.empty_cache()
