@@ -156,7 +156,7 @@ python run.py --is_training 0 \\
                --moving_avg "$MOVING_AVG" \\
                --factor "$FACTOR" \\
                --devices "$DEVICES" \\
-               --batch_size "$BATCH_SIZE" \\
+               --batch_size "$BATCH_SIZE" \
                --dropout "$DROPOUT" \
                "${OTHER_ARGS[@]}" # Pass any other args captured
 
