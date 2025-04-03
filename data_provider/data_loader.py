@@ -228,23 +228,27 @@ class Dataset_Custom(Dataset):
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
 
-        # Determine feature columns (excluding target and date)
-        feature_cols = list(df_raw.columns)
-        try:
-            feature_cols.remove(self.target)
-            feature_cols.remove('date')
-        except ValueError as e:
-            print(f"Error removing columns: {e}. Check target name ('{self.target}') and if 'date' column exists.")
-            print(f"Available columns: {list(df_raw.columns)}")
-            raise
-        target_col = self.target
-
+        # Get all columns except date and target
+        all_cols = list(df_raw.columns)
+        all_cols.remove('date')
+        all_cols.remove(self.target)
+        
+        # Maintain the original order of features
+        # For example, if original order is [date, Voltage, Current, Temp, SOC]
+        # and target is Temp, then feature_cols will be [Voltage, Current, SOC]
+        # in their original order
+        feature_cols = [col for col in df_raw.columns if col not in ['date', self.target]]
+        
         # Rearrange df_raw to have features first, then target
-        df_raw = df_raw[['date'] + feature_cols + [target_col]]
+        # This ensures consistent ordering for model input
+        df_raw = df_raw[['date'] + feature_cols + [self.target]]
+
+        # Store feature columns for reference
+        self.feature_cols = feature_cols
 
         # Select all numerical columns (features + target) for processing
         if self.features == 'M' or self.features == 'MS':
-            cols_for_processing = feature_cols + [target_col]
+            cols_for_processing = feature_cols + [self.target]
             df_data_full = df_raw[cols_for_processing]
         elif self.features == 'S':
             df_data_full = df_raw[[self.target]]

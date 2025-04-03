@@ -199,6 +199,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         print(f"Testing with custom test file: {test_file}")
         test_data, test_loader = self._get_data(flag='test', test_file=test_file)
+        print(f"Test data shape: {test_data.data_x.shape}")
+        print(f"Test data length: {len(test_data)}")
+        print(f"Batch size: {self.args.batch_size}")
+        print(f"Number of batches: {len(test_loader)}")
+        
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
@@ -212,6 +217,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(test_loader):
+                print(f"\nProcessing batch {i+1}/{len(test_loader)}")
+                print(f"batch_x shape: {batch_x.shape}")
+                print(f"batch_y shape: {batch_y.shape}")
+                
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
 
@@ -236,66 +245,51 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     if self.args.output_attention:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
                     else:
-                        # Get the full model output before selecting for evaluation
-                        outputs_full = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
-                        # <<< ADD DEBUG PRINT >>>
-                        #print(f"DEBUG: outputs_full shape after model call: {outputs_full.shape}")
-                        # <<< END DEBUG PRINT >>>
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
 
-                # --- Select targets (Temp=1, SOC=2, Voltage=3) for evaluation during testing ---
-                target_indices = [1, 2, 3] # Indices for Temp, SOC, and Voltage
-                # Select the relevant columns from the raw model output
-                outputs_selected = outputs_full[:, -self.args.pred_len:, target_indices]
+                print(f"Model outputs shape: {outputs.shape}")
 
-                # <<< ADD DEBUG PRINT >>>
-                #print(f"DEBUG: batch_y shape on device before selection: {batch_y.shape}")
-                #print(f"DEBUG: target_indices: {target_indices}")
-                # <<< END DEBUG PRINT >>>
-
+                # --- Dynamically determine target indices based on feature order ---
+                # Get the feature order from the dataset
+                feature_order = test_data.feature_cols
+                target_indices = []
+                for target in ['Temp', 'SOC', 'Voltage']:
+                    if target in feature_order:
+                        target_indices.append(feature_order.index(target))
+                    else:
+                        target_indices.append(len(feature_order))  # If not found, use last index (target column)
+                
+                outputs_selected = outputs[:, -self.args.pred_len:, target_indices]
                 batch_y_selected = batch_y[:, -self.args.pred_len:, target_indices].to(self.device)
+
+                print(f"Selected outputs shape: {outputs_selected.shape}")
+                print(f"Selected batch_y shape: {batch_y_selected.shape}")
 
                 # Detach outputs and selected batch_y for processing/saving
                 outputs_np = outputs_selected.detach().cpu().numpy()
-                batch_y_numpy = batch_y.detach().cpu().numpy() # Get full original batch_y as numpy
-                batch_y_numpy_selected = batch_y_numpy[:, -self.args.pred_len:, target_indices] # Select targets from numpy version
+                batch_y_numpy = batch_y.detach().cpu().numpy()
+                batch_y_numpy_selected = batch_y_numpy[:, -self.args.pred_len:, target_indices]
 
-                # Initialize pred and true with selected model outputs and selected batch_y values
-                # --- Since data is pre-scaled and internal scaling is off, these are scaled values ---
                 pred = outputs_np
-                true = batch_y_numpy_selected # These now contain scaled Temp, SOC, and Voltage
+                true = batch_y_numpy_selected
 
-                # --- This block will be skipped as test_data.scale is False ---
-                if test_data.scale and self.args.inverse:
-                    print("Performing inverse transform - THIS SHOULD NOT HAPPEN IF DATA IS PRE-SCALED")
-                    # Fetch mean and std for the output columns
-                    # Assuming scaler was fit on [Current, Temp, SOC, Voltage]
-                    output_means = test_data.scaler.mean_[target_indices] # Now gets mean for Temp, SOC, Voltage
-                    output_stds = test_data.scaler.scale_[target_indices] # Now gets std for Temp, SOC, Voltage
+                print(f"Pred shape: {pred.shape}")
+                print(f"True shape: {true.shape}")
 
-                    # Rescale predictions and true values (update pred and true) - Broadcast across time dimension
-                    pred = (outputs_np * output_stds) + output_means
-                    true = (batch_y_numpy_selected * output_stds) + output_means
-                # --- End skipped block ---
-
-                # Append to the results (preds/trues now have 3 scaled columns)
                 preds.append(pred)
                 trues.append(true)
 
-                # if i % 20 == 0:
-                #     input = batch_x.detach().cpu().numpy()
-                #     if test_data.scale and self.args.inverse:
-                #         shape = input.shape
-                #         input = test_data.inverse_transform(input.squeeze(0)).reshape(shape)
-                #     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
-                #     pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
-                #     visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
-
         preds = np.concatenate(preds, axis=0)
         trues = np.concatenate(trues, axis=0)
-        print('test shape:', preds.shape, trues.shape)
+        print('\nFinal shapes after concatenation:')
+        print('preds shape:', preds.shape)
+        print('trues shape:', trues.shape)
+        
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-        print('test shape:', preds.shape, trues.shape)
+        print('Final shapes after reshape:')
+        print('preds shape:', preds.shape)
+        print('trues shape:', trues.shape)
 
         # result save
         folder_path = './results/' + setting + '/'
@@ -344,19 +338,24 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # Save predictions and true values as CSV - Adjust columns
         csv_file_path = os.path.join(folder_path, 'results_scaled.csv')
         # Reshape for CSV: each row is one time step
-        preds_flat = preds.reshape(-1, preds.shape[-1]) # Shape: (N_samples*pred_len, 3)
-        trues_flat = trues.reshape(-1, trues.shape[-1]) # Shape: (N_samples*pred_len, 3)
+        preds_flat = preds.reshape(-1, preds.shape[-1])
+        trues_flat = trues.reshape(-1, trues.shape[-1])
 
-        results_df = pd.DataFrame({
-            # 'Prediction_Current': preds_flat[:, 0], # Index 0 is not Current anymore if Current wasn't in target_indices
-            # 'True_Current': trues_flat[:, 0],
-            'Prediction_Temp': preds_flat[:, 0],    # Index 0 of selected is Temp
-            'True_Temp': trues_flat[:, 0],
-            'Prediction_SOC': preds_flat[:, 1],     # Index 1 of selected is SOC
-            'True_SOC': trues_flat[:, 1],
-            'Prediction_Voltage': preds_flat[:, 2], # Index 2 of selected is Voltage
-            'True_Voltage': trues_flat[:, 2]
-        })
+        # Get the feature order from the dataset
+        feature_order = test_data.feature_cols
+        target_col = test_data.target
+
+        # Create column names based on actual feature order
+        results_dict = {}
+        for i, feature in enumerate(feature_order):
+            results_dict[f'Prediction_{feature}'] = preds_flat[:, i]
+            results_dict[f'True_{feature}'] = trues_flat[:, i]
+        
+        # Add target column
+        results_dict[f'Prediction_{target_col}'] = preds_flat[:, -1]
+        results_dict[f'True_{target_col}'] = trues_flat[:, -1]
+
+        results_df = pd.DataFrame(results_dict)
         results_df.to_csv(csv_file_path, index=False)
         # --- End metric/saving adjustment ---
 
