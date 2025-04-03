@@ -10,6 +10,9 @@ import time
 import warnings
 import numpy as np
 import pandas as pd
+from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import StandardScaler
+from utils.timefeatures import time_features
 
 warnings.filterwarnings('ignore')
 
@@ -365,23 +368,169 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return
 
     def simulate(self, setting):
-        # TODO: Implement autoregressive simulation logic
-        # 1. Load model checkpoint based on 'setting'
-        # 2. Get test data (use flag='test', maybe use a dataloader with batch_size=1)
-        # 3. Get initial seed sequence (first seq_len points)
-        # 4. Loop for the desired simulation horizon:
-        #    a. Prepare model inputs (current window of C, T, S, V and time features)
-        #    b. Predict the next step (T, S, V)
-        #    c. Inverse transform/denormalize predictions
-        #    d. Store predictions
-        #    e. Get true Current for the next step
-        #    f. Construct the next state (True C + Predicted T, S, V)
-        #    g. Update the history window (add new state, remove oldest)
-        #    h. Handle normalization/scaling for the next input
-        # 5. Save simulation results (predicted T, S, V)
-        # 6. Optionally, load true T, S, V for the horizon and calculate metrics
-        print(f"Simulation method called for setting: {setting} - Not implemented yet.")
-        pass
+        print(f"Starting simulation for setting: {setting}")
+
+        # 1. Load Model Checkpoint
+        model_path = os.path.join(self.args.checkpoints, setting, 'checkpoint.pth')
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Checkpoint not found at {model_path}")
+        print(f"Loading model from: {model_path}")
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.model.eval() # Set model to evaluation mode
+
+        # 2. Get Test Data Object and Scaler
+        # Use flag='test' to get the dataset object configured for test data
+        # We need direct access to its data_x, data_stamp, and scaler
+        test_data, _ = self._get_data(flag='test', test_file=self.args.data_path)
+        scaler = test_data.scaler
+        # Note the warning about the scaler potentially being fit on test data
+        print(f"Using test data file: {self.args.data_path}")
+        print(f"Test data shape (scaled): {test_data.data_x.shape}")
+        print(f"Test data stamps shape: {test_data.data_stamp.shape}")
+
+        # Assume data_x columns: [Current, Temp, SOC, Voltage] -> Indices 0, 1, 2, 3
+        current_col_idx = 0
+        pred_indices = [1, 2, 3] # Indices for T, S, V in the data_x array
+
+        # 3. Get Initial Seed Sequence & Future/Ground Truth Data
+        seq_len = self.args.seq_len
+        if len(test_data.data_x) < seq_len:
+            raise ValueError("Test data length is less than sequence length.")
+
+        # Initial history window (scaled data and time features)
+        current_window_x = torch.from_numpy(test_data.data_x[0:seq_len]).float()
+        current_window_mark = torch.from_numpy(test_data.data_stamp[0:seq_len]).float()
+
+        # Data needed for the loop and final evaluation
+        # True future currents (scaled) for input construction
+        future_true_current_scaled = test_data.data_x[seq_len:, current_col_idx]
+        # True future T, S, V (unscaled) for evaluation
+        # Need to get unscaled data - we can inverse transform the relevant part of data_x
+        ground_truth_unscaled_full = scaler.inverse_transform(test_data.data_x)
+        ground_truth_unscaled_TSV = ground_truth_unscaled_full[seq_len:, pred_indices]
+        # Time features for the prediction steps
+        future_marks = torch.from_numpy(test_data.data_stamp[seq_len:]).float()
+
+        # Simulation horizon
+        horizon = len(test_data.data_x) - seq_len
+        print(f"Simulation horizon: {horizon} steps")
+
+        # Lists to store unscaled simulation results
+        simulated_T_unscaled = []
+        simulated_S_unscaled = []
+        simulated_V_unscaled = []
+
+        # 4. Autoregressive Simulation Loop
+        with torch.no_grad():
+            for k in range(horizon):
+                # a. Prepare model inputs
+                batch_x = current_window_x.unsqueeze(0).to(self.device) # Add batch dim
+                batch_x_mark = current_window_mark.unsqueeze(0).to(self.device)
+
+                # Prepare decoder input (assuming pred_len=1 for simulation step)
+                # Placeholder for decoder input, shape (1, label_len + pred_len=1, num_features)
+                # Need the *next* timestamp for the prediction step's mark
+                next_step_mark = future_marks[k].unsqueeze(0) # Shape (1, num_time_features)
+                # For iTransformer with label_len=0, pred_len=1
+                dec_inp = torch.zeros((1, 1, self.args.enc_in), device=self.device).float() # Placeholder (1, 1, features)
+                batch_y_mark = next_step_mark.unsqueeze(1).to(self.device) # Shape (1, 1, time_features)
+
+                # b. Predict the next step (scaled T, S, V and potentially C)
+                if self.args.use_amp:
+                     with torch.cuda.amp.autocast():
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        if isinstance(outputs, tuple): outputs = outputs[0]
+                else:
+                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    if isinstance(outputs, tuple): outputs = outputs[0]
+
+                # Output shape is (1, 1, enc_in) - predictions for step k+1
+                predicted_step_scaled = outputs[:, -1, :] # Take the last (only) prediction step
+
+                # Extract predicted T, S, V (scaled) - indices 1, 2, 3 relative to enc_in
+                predicted_TSV_scaled = predicted_step_scaled[:, pred_indices]
+
+                # c. Inverse transform/denormalize predictions
+                # Reshape for scaler: (num_samples, num_features) -> need (1, 3)
+                predicted_TSV_scaled_np = predicted_TSV_scaled.squeeze(0).cpu().numpy().reshape(1, -1)
+                # Use scaler fitted on potentially only test data!
+                means_TSV = scaler.mean_[pred_indices]
+                stds_TSV = scaler.scale_[pred_indices]
+                predicted_TSV_unscaled = (predicted_TSV_scaled_np * stds_TSV) + means_TSV
+
+                # d. Store unscaled predictions
+                simulated_T_unscaled.append(predicted_TSV_unscaled[0, 0]) # Temp is index 0 of TSV
+                simulated_S_unscaled.append(predicted_TSV_unscaled[0, 1]) # SOC is index 1 of TSV
+                simulated_V_unscaled.append(predicted_TSV_unscaled[0, 2]) # Voltage is index 2 of TSV
+
+                # e. Get true Current for the next step (already scaled)
+                true_current_scaled_next = future_true_current_scaled[k] # This is a scalar
+
+                # f. Construct the *next* state vector (scaled) for the history window
+                # Combine true scaled Current with predicted scaled T, S, V
+                # Ensure true_current_scaled_next is correctly shaped (1,)
+                next_state_scaled = torch.cat([
+                    torch.tensor([true_current_scaled_next], device=self.device), # True C
+                    predicted_TSV_scaled.squeeze(0).to(self.device) # Predicted T, S, V
+                ], dim=0) # Shape should be (enc_in,)
+
+                # g. Update the history window (append new, remove oldest)
+                # Append along the time dimension (dim 0)
+                current_window_x = torch.cat([current_window_x[1:], next_state_scaled.unsqueeze(0)], dim=0)
+                current_window_mark = torch.cat([current_window_mark[1:], next_step_mark], dim=0)
+
+                # Print progress (optional)
+                if (k + 1) % 1000 == 0:
+                    print(f"Simulated step {k+1}/{horizon}")
+
+        print("Simulation loop finished.")
+
+        # 5. Save Simulation Results
+        sim_results_folder = './results/' + setting + '_simulation/'
+        if not os.path.exists(sim_results_folder): os.makedirs(sim_results_folder)
+
+        simulated_T = np.array(simulated_T_unscaled)
+        simulated_S = np.array(simulated_S_unscaled)
+        simulated_V = np.array(simulated_V_unscaled)
+
+        np.save(os.path.join(sim_results_folder, 'sim_pred_T.npy'), simulated_T)
+        np.save(os.path.join(sim_results_folder, 'sim_pred_S.npy'), simulated_S)
+        np.save(os.path.join(sim_results_folder, 'sim_pred_V.npy'), simulated_V)
+        np.save(os.path.join(sim_results_folder, 'sim_true_TSV.npy'), ground_truth_unscaled_TSV) # Save ground truth for easy loading
+
+        # Save combined CSV
+        sim_df = pd.DataFrame({
+            'Simulated_Temp': simulated_T, 'True_Temp': ground_truth_unscaled_TSV[:, 0],
+            'Simulated_SOC': simulated_S, 'True_SOC': ground_truth_unscaled_TSV[:, 1],
+            'Simulated_Voltage': simulated_V, 'True_Voltage': ground_truth_unscaled_TSV[:, 2]
+        })
+        sim_csv_path = os.path.join(sim_results_folder, 'simulation_results.csv')
+        sim_df.to_csv(sim_csv_path, index=False)
+        print(f"Simulation results saved to: {sim_results_folder}")
+
+        # 6. Evaluate Simulation Metrics
+        mae_T, mse_T, rmse_T, _, _ = metric(simulated_T, ground_truth_unscaled_TSV[:, 0])
+        mae_S, mse_S, rmse_S, _, _ = metric(simulated_S, ground_truth_unscaled_TSV[:, 1])
+        mae_V, mse_V, rmse_V, _, _ = metric(simulated_V, ground_truth_unscaled_TSV[:, 2])
+
+        print("\n--- Simulation Metrics ---")
+        print(f"Temp: MAE={mae_T:.7f}, MSE={mse_T:.7f}, RMSE={rmse_T:.7f}")
+        print(f"SOC:  MAE={mae_S:.7f}, MSE={mse_S:.7f}, RMSE={rmse_S:.7f}")
+        print(f"Volt: MAE={mae_V:.7f}, MSE={mse_V:.7f}, RMSE={rmse_V:.7f}")
+
+        # Save metrics to file
+        metrics_summary = {
+            'Temp': {'MAE': mae_T, 'MSE': mse_T, 'RMSE': rmse_T},
+            'SOC': {'MAE': mae_S, 'MSE': mse_S, 'RMSE': rmse_S},
+            'Voltage': {'MAE': mae_V, 'MSE': mse_V, 'RMSE': rmse_V}
+        }
+        with open(os.path.join(sim_results_folder, 'simulation_metrics.txt'), 'w') as f:
+            import json
+            f.write(json.dumps(metrics_summary, indent=4))
+        print("Simulation metrics saved.")
+
+
+        return # End of simulate method
 
     def predict(self, setting, load=False):
         pred_data, pred_loader = self._get_data(flag='pred')

@@ -34,7 +34,7 @@ DROPOUT=0.35 # Should match training
 # Array to hold arguments not explicitly handled here but needed by run.py
 OTHER_ARGS=()
 # Add use_norm=True by default based on the run log, assuming run.py accepts it directly
-OTHER_ARGS+=(--use_norm)
+OTHER_ARGS+=(--use_norm 1) # Provide 1 since type=int is expected
 # Inverse transform should likely be applied within the simulation loop
 # OTHER_ARGS+=(--inverse)
 
