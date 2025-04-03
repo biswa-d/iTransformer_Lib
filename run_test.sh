@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Argument Parsing ---
-SETTING_FILE_PATH=""
+SETTING_FILE_PATH="Logs/setting_20250403_172133.txt"
 
 # --- Configuration (Define defaults or allow overrides via arguments) ---
 # Defaults set to match the specific training run: setting_20250329_094517
@@ -11,7 +11,6 @@ DATA="custom"
 ROOT_PATH="./data/"
 TEST_DATA="lg_test.csv" # Test data path used in the run
 FEATURES="MS"
-TARGET="Voltage"
 SEQ_LEN=200
 LABEL_LEN=0
 PRED_LEN=1
@@ -19,14 +18,17 @@ ENC_IN=3
 DEC_IN=3
 C_OUT=1
 D_MODEL=32
-N_HEADS=4
+N_HEADS=2
 E_LAYERS=2
 D_LAYERS=1
-D_FF=64
+D_FF=128
 MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
-BATCH_SIZE=100 # Test batch size used in the run
+TRAIN_EPOCHS=1
+BATCH_SIZE=200
+PATIENCE=20
+LEARNING_RATE=0.0008
 DROPOUT=0.35
 # Other relevant parameters from the run (can be added to OTHER_ARGS if needed by run.py test mode)
 # embed='timeF', activation='gelu', use_norm=True

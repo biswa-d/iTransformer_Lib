@@ -231,29 +231,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Input feature order: {feature_order_input}")
         print(f"Target column: {target_col}")
 
-        # Find the index of the target column in the original data ordering (used by data_y)
-        # Assumes data_y columns are [feature1, feature2, feature3, target]
-        target_idx_in_y = len(feature_order_input) # Target is the last column in data_y
-
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(test_loader):
-                # batch_x shape: [B, L, 3] (SOC, I, T - or whichever order)
-                # batch_y shape: [B, L+pred_len, 4] (SOC, I, T, V)
-                # print(f"\nProcessing batch {i+1}/{len(test_loader)}") # Remove
-                # print(f"batch_x shape: {batch_x.shape}") # Remove
-                # print(f"batch_y shape: {batch_y.shape}") # Remove
+                # batch_x shape: [B, L, 3]
+                # batch_y shape: [B, 1, 1] (Directly contains target V(t))
                 
                 batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float().to(self.device) # Contains true V
+                batch_y = batch_y.float().to(self.device) # This IS the target V(t)
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # Decoder input: For iTransformer, label_len=0, pred_len=1 usually
-                # Still need a placeholder, shape depends on model's internal needs for y_mark
-                # Let's assume label_len=0 for simplicity as often used with iTransformer
+                # Decoder input (Placeholder, shape depends on model needs for y_mark)
                 dec_inp = torch.zeros((batch_x.size(0), self.args.pred_len, batch_x.size(2)), device=self.device).float()
-                # Note: The dec_inp size matches batch_x features (3), but the model predicts c_out (1) features.
 
                 # Get model outputs
                 if self.args.use_amp:
@@ -264,24 +254,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                     if isinstance(outputs, tuple): outputs = outputs[0]
                 
-                # Model output shape: [B, pred_len, c_out] - expecting c_out=1 (Voltage)
-                # print(f"Model outputs shape: {outputs.shape}") # Remove 
+                # Model output shape: [B, pred_len=1, c_out=1]
+                pred_v = outputs.detach().cpu() # Shape [B, 1, 1]
                 
-                # --- Verification --- 
-                if outputs.shape[-1] != 1:
-                     print(f"Warning: Model output dimension ({outputs.shape[-1]}) doesn't match expected c_out=1 for Voltage prediction.")
-                     # Handle this case appropriately - maybe take the first column? Or raise error?
-                     # Taking first column for now:
-                     pred_v = outputs[:, -self.args.pred_len:, 0:1].detach().cpu() 
-                else:
-                     pred_v = outputs[:, -self.args.pred_len:, :].detach().cpu() # Shape [B, pred_len, 1]
-                
-                # Get true voltage from batch_y 
-                # Target is the last column in the original data order used for batch_y
-                true_v = batch_y[:, -self.args.pred_len:, target_idx_in_y:].detach().cpu() # Shape [B, pred_len, 1]
-
-                # print(f"Pred Voltage shape: {pred_v.shape}") # Remove
-                # print(f"True Voltage shape: {true_v.shape}") # Remove
+                # --- Get true voltage Directly from batch_y ---
+                # batch_y already contains the target V(t) with shape [B, 1, 1]
+                true_v = batch_y.detach().cpu() # Shape [B, 1, 1]
+                # --- End Change ---
 
                 voltage_preds.append(pred_v.numpy())
                 voltage_trues.append(true_v.numpy())
