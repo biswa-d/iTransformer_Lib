@@ -309,7 +309,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 metrics[feature] = {'mae': mae, 'mse': mse, 'rmse': rmse}
                 print(f'{feature} -> Index in preds/trues: {idx}, MSE:{mse:.7f}, MAE:{mae:.7f}')
             else:
-                print(f'{feature} not found in this run's features/target.')
+                # Use double quotes for the f-string to allow the inner single quote
+                print(f"{feature} not found in this run's features/target.")
+                # Corrected dictionary assignment without unnecessary backslashes
                 metrics[feature] = {'mae': np.nan, 'mse': np.nan, 'rmse': np.nan} # Placeholder
 
         # Calculate combined metrics (only for features present in the run)
