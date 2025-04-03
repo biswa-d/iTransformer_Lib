@@ -231,18 +231,18 @@ class Dataset_Custom(Dataset):
                                           self.data_path))
 
         # Identify feature columns (excluding date and target)
-        print(f"Reading data with target: {self.target}") # Debug print
+        # print(f"Reading data with target: {self.target}") # Debug print
         all_columns = list(df_raw.columns)
-        print(f"All columns found: {all_columns}") # Debug print
+        # print(f"All columns found: {all_columns}") # Debug print
         feature_cols = [col for col in all_columns if col not in ['date', self.target]]
         self.feature_cols = feature_cols # Store the names of the INPUT features
-        print(f"Input features identified (cols_for_x): {self.feature_cols}") # Debug print
-        print(f"Number of input features: {len(self.feature_cols)}") # Debug print
+        # print(f"Input features identified (cols_for_x): {self.feature_cols}") # Debug print
+        # print(f"Number of input features: {len(self.feature_cols)}") # Debug print
 
         # Define columns for input (x) and target sequence base (y)
         cols_for_x = self.feature_cols
         cols_for_y = self.feature_cols + [self.target] # y needs the target column for slicing later
-        print(f"Columns for Y (target base): {cols_for_y}") # Debug print
+        # print(f"Columns for Y (target base): {cols_for_y}") # Debug print
 
         # Get data values for x and y
         try:
@@ -269,8 +269,8 @@ class Dataset_Custom(Dataset):
         # Assign data_x (only input features) and data_y (features + target)
         self.data_x = data_values_x[border1:border2]
         self.data_y = data_values_y[border1:border2]
-        print(f"Shape of self.data_x (input features): {self.data_x.shape}") # Debug print
-        print(f"Shape of self.data_y (features + target): {self.data_y.shape}") # Debug print
+        # print(f"Shape of self.data_x (input features): {self.data_x.shape}") # Debug print
+        # print(f"Shape of self.data_y (features + target): {self.data_y.shape}") # Debug print
 
         # --- Time Stamp Processing (remains the same) ---
         df_stamp = df_raw[['date']][border1:border2]

@@ -124,8 +124,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     batch_x_mark = batch_x_mark.float().to(self.device)
                     batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # <<<--- Add Debug Print Here --->>>
-                print(f"Epoch {epoch+1}, Batch {i+1}: Shape of batch_x fed to model: {batch_x.shape}")
+                # <<<--- Remove Debug Print Here --->>>
+                # print(f"Epoch {epoch+1}, Batch {i+1}: Shape of batch_x fed to model: {batch_x.shape}")
                 # <<<--------------------------->>>
 
                 # decoder input
@@ -157,10 +157,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
-                    print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                    # print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
-                    print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
+                    # print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
                     iter_count = 0
                     time_now = time.time()
 
@@ -240,9 +240,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(test_loader):
                 # batch_x shape: [B, L, 3] (SOC, I, T - or whichever order)
                 # batch_y shape: [B, L+pred_len, 4] (SOC, I, T, V)
-                print(f"\nProcessing batch {i+1}/{len(test_loader)}")
-                print(f"batch_x shape: {batch_x.shape}")
-                print(f"batch_y shape: {batch_y.shape}")
+                # print(f"\nProcessing batch {i+1}/{len(test_loader)}") # Remove
+                # print(f"batch_x shape: {batch_x.shape}") # Remove
+                # print(f"batch_y shape: {batch_y.shape}") # Remove
                 
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device) # Contains true V
@@ -265,7 +265,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     if isinstance(outputs, tuple): outputs = outputs[0]
                 
                 # Model output shape: [B, pred_len, c_out] - expecting c_out=1 (Voltage)
-                print(f"Model outputs shape: {outputs.shape}") 
+                # print(f"Model outputs shape: {outputs.shape}") # Remove 
                 
                 # --- Verification --- 
                 if outputs.shape[-1] != 1:
@@ -280,8 +280,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # Target is the last column in the original data order used for batch_y
                 true_v = batch_y[:, -self.args.pred_len:, target_idx_in_y:].detach().cpu() # Shape [B, pred_len, 1]
 
-                print(f"Pred Voltage shape: {pred_v.shape}")
-                print(f"True Voltage shape: {true_v.shape}")
+                # print(f"Pred Voltage shape: {pred_v.shape}") # Remove
+                # print(f"True Voltage shape: {true_v.shape}") # Remove
 
                 voltage_preds.append(pred_v.numpy())
                 voltage_trues.append(true_v.numpy())

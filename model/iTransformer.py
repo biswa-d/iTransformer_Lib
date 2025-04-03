@@ -53,27 +53,22 @@ class Model(nn.Module):
             # unless you implement a specific way to pass/use the target variable's original mean/std.
 
         B, L, N = x_enc.shape # N should be self.enc_in (e.g., 3)
-        print(f"    [forecast] Input x_enc shape: {x_enc.shape}") # Debug
+        # print(f"    [forecast] Input x_enc shape: {x_enc.shape}") # Debug
         
         # Embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc) 
-        print(f"    [forecast] Shape after Embedding (enc_out): {enc_out.shape}") # Debug
-        # Expected: (B, 3, 32)
+        # print(f"    [forecast] Shape after Embedding (enc_out): {enc_out.shape}") # Debug
         
         # Encoder
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
-        print(f"    [forecast] Shape after Encoder (enc_out): {enc_out.shape}") # Debug
-        # Expected: (B, 3, 32)
+        # print(f"    [forecast] Shape after Encoder (enc_out): {enc_out.shape}") # Debug
 
         # Projector (Modified)
-        # Flatten the N and E dimensions
         enc_out_flat = enc_out.reshape(B, -1) # Shape: [B, N * E]
-        print(f"    [forecast] Shape after Flatten (enc_out_flat): {enc_out_flat.shape}") # Debug
-        # Expected: (B, 96) if enc_out was (B, 3, 32)
+        # print(f"    [forecast] Shape after Flatten (enc_out_flat): {enc_out_flat.shape}") # Debug
 
         # Project to prediction length
-        print(f"    [forecast] Projector weight shape: {self.projector.weight.shape}") # Debug
-        # Expected: (1, 96)
+        # print(f"    [forecast] Projector weight shape: {self.projector.weight.shape}") # Debug
         dec_out_flat = self.projector(enc_out_flat) # Shape: [B, pred_len]
         # Reshape to target format
         dec_out = dec_out_flat.unsqueeze(-1) # Shape: [B, pred_len, 1]
