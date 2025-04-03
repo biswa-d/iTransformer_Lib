@@ -239,8 +239,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         print(f"DEBUG: outputs_full shape after model call: {outputs_full.shape}")
                         # <<< END DEBUG PRINT >>>
 
-                # --- Select targets (Temp=1, SOC=2, Voltage=3) for evaluation during testing ---
-                target_indices = [1, 2, 3] # Indices for Temp, SOC, and Voltage
+                # --- Select targets (Temp=1, SOC=2) for evaluation during testing ---
+                target_indices = [1, 2] # Indices for Temp and SOC
                 # Select the relevant columns from the raw model output
                 outputs_selected = outputs_full[:, -self.args.pred_len:, target_indices]
 
@@ -258,7 +258,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 # Initialize pred and true with selected model outputs and selected batch_y values
                 pred = outputs_np
-                true = batch_y_numpy_selected # These now contain Temp, SOC, and Voltage
+                true = batch_y_numpy_selected # These now contain Temp and SOC
 
                 # Only rescale if both conditions are met
                 if test_data.scale and self.args.inverse:
@@ -277,7 +277,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # Clamp predictions AFTER potential rescaling (apply column-wise if needed)
                 # pred = np.clip(pred, ...) 
 
-                # Append to the results (preds/trues now have 3 columns)
+                # Append to the results (preds/trues now have 2 columns)
                 preds.append(pred)
                 trues.append(true)
 
@@ -302,19 +302,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        # --- Adjust Metric Calculation and Saving for 3 Targets (Temp, SOC, Volt) ---
+        # --- Adjust Metric Calculation and Saving for 2 Targets (Temp, SOC) ---
         # Calculate metrics for each target separately for clarity
         mae_temp, mse_temp, rmse_temp, _, _ = metric(preds[:, :, 0], trues[:, :, 0]) # Metrics for Temp (index 0 in preds/trues)
         mae_soc,  mse_soc,  rmse_soc,  _, _ = metric(preds[:, :, 1], trues[:, :, 1]) # Metrics for SOC (index 1 in preds/trues)
-        mae_volt, mse_volt, rmse_volt, _, _ = metric(preds[:, :, 2], trues[:, :, 2]) # Metrics for Voltage (index 2 in preds/trues)
+        # mae_volt, mse_volt, rmse_volt, _, _ = metric(preds[:, :, 2], trues[:, :, 2]) # Voltage not evaluated
 
         print(f'Temp MSE:{mse_temp:.7f}, MAE:{mae_temp:.7f}')
         print(f'SOC  MSE:{mse_soc:.7f}, MAE:{mae_soc:.7f}')
-        print(f'Volt MSE:{mse_volt:.7f}, MAE:{mae_volt:.7f}')
+        # print(f'Volt MSE:{mse_volt:.7f}, MAE:{mae_volt:.7f}')
         # Calculate combined/average metrics if desired (optional)
-        mae_combined = np.mean([mae_temp, mae_soc, mae_volt])
-        mse_combined = np.mean([mse_temp, mse_soc, mse_volt])
-        rmse_combined = np.mean([rmse_temp, rmse_soc, rmse_volt])
+        mae_combined = np.mean([mae_temp, mae_soc])
+        mse_combined = np.mean([mse_temp, mse_soc])
+        rmse_combined = np.mean([rmse_temp, rmse_soc])
         print(f'Avg MSE:{mse_combined:.7f}, MAE:{mae_combined:.7f}')
 
         # Calculate the number of trainable parameters
@@ -325,33 +325,37 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         with open("result_long_term_forecast.txt", 'a') as f:
             f.write(setting + "  \n")
             f.write(f'mse_avg:{mse_combined:.7f}, mae_avg:{mae_combined:.7f}, rmse_avg:{rmse_combined:.7f}\n')
+            # f.write(f'mse_curr:{mse_curr:.7f}, mae_curr:{mae_curr:.7f}, rmse_curr:{rmse_curr:.7f}\n') # Current not evaluated
             f.write(f'mse_temp:{mse_temp:.7f}, mae_temp:{mae_temp:.7f}, rmse_temp:{rmse_temp:.7f}\n')
             f.write(f'mse_soc:{mse_soc:.7f}, mae_soc:{mae_soc:.7f}, rmse_soc:{rmse_soc:.7f}\n')
-            f.write(f'mse_volt:{mse_volt:.7f}, mae_volt:{mae_volt:.7f}, rmse_volt:{rmse_volt:.7f}\n')
+            # f.write(f'mse_volt:{mse_volt:.7f}, mae_volt:{mae_volt:.7f}, rmse_volt:{rmse_volt:.7f}\n') # Voltage not evaluated
             f.write(f'parameters:{num_parameters}\n')
             f.write('\n')
 
         np.save(folder_path + 'metrics_avg.npy', np.array([mae_combined, mse_combined, rmse_combined]))
+        # np.save(folder_path + 'metrics_curr.npy', np.array([mae_curr, mse_curr, rmse_curr]))
         np.save(folder_path + 'metrics_temp.npy', np.array([mae_temp, mse_temp, rmse_temp]))
         np.save(folder_path + 'metrics_soc.npy', np.array([mae_soc, mse_soc, rmse_soc]))
-        np.save(folder_path + 'metrics_volt.npy', np.array([mae_volt, mse_volt, rmse_volt]))
+        # np.save(folder_path + 'metrics_volt.npy', np.array([mae_volt, mse_volt, rmse_volt]))
 
-        np.save(folder_path + 'pred.npy', preds) # preds contains Temp, SOC, and Volt predictions
-        np.save(folder_path + 'true.npy', trues) # trues contains Temp, SOC, and Volt ground truth
+        np.save(folder_path + 'pred.npy', preds) # preds contains Temp and SOC predictions
+        np.save(folder_path + 'true.npy', trues) # trues contains Temp and SOC ground truths
 
         # Save predictions and true values as CSV - Adjust columns
         csv_file_path = os.path.join(folder_path, 'results.csv')
         # Reshape for CSV: each row is one time step
-        preds_flat = preds.reshape(-1, preds.shape[-1]) # Shape: (N_samples*pred_len, 3)
-        trues_flat = trues.reshape(-1, trues.shape[-1]) # Shape: (N_samples*pred_len, 3)
+        preds_flat = preds.reshape(-1, preds.shape[-1]) # Shape: (N_samples*pred_len, 2)
+        trues_flat = trues.reshape(-1, trues.shape[-1]) # Shape: (N_samples*pred_len, 2)
 
         results_df = pd.DataFrame({
+            # 'Prediction_Current': preds_flat[:, 0],
+            # 'True_Current': trues_flat[:, 0],
             'Prediction_Temp': preds_flat[:, 0],
             'True_Temp': trues_flat[:, 0],
             'Prediction_SOC': preds_flat[:, 1],
             'True_SOC': trues_flat[:, 1],
-            'Prediction_Voltage': preds_flat[:, 2],
-            'True_Voltage': trues_flat[:, 2]
+            # 'Prediction_Voltage': preds_flat[:, 2],
+            # 'True_Voltage': trues_flat[:, 2]
         })
         results_df.to_csv(csv_file_path, index=False)
         # --- End metric/saving adjustment ---

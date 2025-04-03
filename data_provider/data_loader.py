@@ -267,10 +267,8 @@ class Dataset_Custom(Dataset):
         else:
             data_scaled_full = df_data_full.values
 
-        # Assign data_x (only features) and data_y (features + target)
-        # Features are all columns except the last one in data_scaled_full
-        self.data_x = data_scaled_full[:, :-1][border1:border2]
-        # Data_y includes all scaled columns (features + target)
+        # Assign data_x AND data_y to the full scaled data
+        self.data_x = data_scaled_full[border1:border2]
         self.data_y = data_scaled_full[border1:border2]
 
         # --- Time Stamp Processing (remains the same) ---
@@ -303,7 +301,7 @@ class Dataset_Custom(Dataset):
 
         # Inject noise during training if enabled
         if self.use_noise:
-            # Create noise for each feature
+            # Create noise for each feature (now 4 columns in seq_x)
             noise = np.zeros_like(seq_x)
             # Apply noise based on correct feature order: Current, Temp, SOC, Voltage
             # Ensure column indices exist before applying noise
