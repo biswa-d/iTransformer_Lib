@@ -124,6 +124,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     batch_x_mark = batch_x_mark.float().to(self.device)
                     batch_y_mark = batch_y_mark.float().to(self.device)
 
+                # <<<--- Add Debug Print Here --->>>
+                print(f"Epoch {epoch+1}, Batch {i+1}: Shape of batch_x fed to model: {batch_x.shape}")
+                # <<<--------------------------->>>
+
                 # decoder input
                 dec_inp = torch.zeros((batch_x.size(0), self.args.pred_len, batch_x.size(2)), device=self.device).float()
 
