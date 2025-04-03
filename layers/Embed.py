@@ -127,17 +127,32 @@ class DataEmbedding(nn.Module):
 class DataEmbedding_inverted(nn.Module):
     def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1):
         super(DataEmbedding_inverted, self).__init__()
-        self.value_embedding = nn.Linear(c_in, d_model)
+        # c_in is seq_len (L), d_model is E
+        self.value_embedding = nn.Linear(c_in, d_model) # Maps L -> E
+        # Optional: Add a way to embed time features if needed differently
+        # self.temporal_embedding = TimeFeatureEmbedding(d_model, ...) 
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x, x_mark):
+        # x shape: [B, L, N]
         x = x.permute(0, 2, 1)
-        # x: [Batch Variate Time]
-        if x_mark is None:
-            x = self.value_embedding(x)
-        else:
-            # the potential to take covariates (e.g. timestamps) as tokens
-            x = self.value_embedding(torch.cat([x, x_mark.permute(0, 2, 1)], 1)) 
-        # x: [Batch Variate d_model]
+        # x shape: [B, N, L]
+        
+        # Apply embedding to the value features only
+        # Input: [B, N, L], Output: [B, N, E]
+        x = self.value_embedding(x)
+
+        # --- Removed problematic concatenation with x_mark --- 
+        # if x_mark is not None:
+        #    x = torch.cat([x, x_mark.permute(0, 2, 1)], 1) # This caused N -> N+T
+        # x = self.value_embedding(x) # Applied after potential concatenation
+
+        # Optional: Add temporal embedding here if needed
+        # if x_mark is not None:
+        #     # Assuming temporal embedding is designed to add to [B, N, E]
+        #     time_emb = self.temporal_embedding(x_mark) # Needs careful shape handling
+        #     x = x + time_emb 
+            
+        # Output x shape: [B, N, E]
         return self.dropout(x)
 
