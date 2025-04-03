@@ -214,6 +214,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
+        # Get the feature order and target
+        feature_order = test_data.feature_cols  # This will be [Current, SOC, Voltage] when Temp is target
+        target_col = test_data.target  # This will be 'Temp' or whatever is specified
+        
+        # Create a mapping of feature names to their indices in the model's output
+        # The model always outputs predictions in the order: features first, then target
+        feature_to_idx = {feature: idx for idx, feature in enumerate(feature_order)}
+        feature_to_idx[target_col] = len(feature_order)  # Target is always last
+
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(test_loader):
@@ -234,7 +243,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # decoder input
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
-                # encoder - decoder: Use the original batch_x
+                
+                # Get model outputs
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if self.args.output_attention:
@@ -249,29 +259,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 print(f"Model outputs shape: {outputs.shape}")
 
-                # --- Dynamically determine target indices based on feature order ---
-                # Get the feature order from the dataset
-                feature_order = test_data.feature_cols
-                target_indices = []
-                for target in ['Temp', 'SOC', 'Voltage']:
-                    if target in feature_order:
-                        target_indices.append(feature_order.index(target))
-                    else:
-                        target_indices.append(len(feature_order))  # If not found, use last index (target column)
+                # Select predictions and true values for each feature
+                pred_dict = {}
+                true_dict = {}
                 
-                outputs_selected = outputs[:, -self.args.pred_len:, target_indices]
-                batch_y_selected = batch_y[:, -self.args.pred_len:, target_indices].to(self.device)
+                # Process features in their actual order
+                for feature in feature_order + [target_col]:
+                    idx = feature_to_idx[feature]
+                    pred_dict[feature] = outputs[:, -self.args.pred_len:, idx].detach().cpu().numpy()
+                    true_dict[feature] = batch_y[:, -self.args.pred_len:, idx].detach().cpu().numpy()
 
-                print(f"Selected outputs shape: {outputs_selected.shape}")
-                print(f"Selected batch_y shape: {batch_y_selected.shape}")
-
-                # Detach outputs and selected batch_y for processing/saving
-                outputs_np = outputs_selected.detach().cpu().numpy()
-                batch_y_numpy = batch_y.detach().cpu().numpy()
-                batch_y_numpy_selected = batch_y_numpy[:, -self.args.pred_len:, target_indices]
-
-                pred = outputs_np
-                true = batch_y_numpy_selected
+                # Stack predictions and true values in the correct order
+                pred = np.stack([pred_dict[feature] for feature in feature_order + [target_col]], axis=-1)
+                true = np.stack([true_dict[feature] for feature in feature_order + [target_col]], axis=-1)
 
                 print(f"Pred shape: {pred.shape}")
                 print(f"True shape: {true.shape}")
@@ -296,70 +296,78 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        # --- Adjust Metric Calculation and Saving for 3 Scaled Targets ---
-        # Calculate metrics for each target separately for clarity (Metrics are on Scaled Data)
-        mae_temp, mse_temp, rmse_temp, _, _ = metric(preds[:, :, 0], trues[:, :, 0]) # Scaled Temp
-        mae_soc,  mse_soc,  rmse_soc,  _, _ = metric(preds[:, :, 1], trues[:, :, 1]) # Scaled SOC
-        mae_volt, mse_volt, rmse_volt, _, _ = metric(preds[:, :, 2], trues[:, :, 2]) # Scaled Voltage
+        # Define a canonical order for saving results consistently
+        canonical_save_order = ['Current', 'SOC', 'Temp', 'Voltage']
 
-        print(f'Scaled Temp MSE:{mse_temp:.7f}, MAE:{mae_temp:.7f}')
-        print(f'Scaled SOC  MSE:{mse_soc:.7f}, MAE:{mae_soc:.7f}')
-        print(f'Scaled Volt MSE:{mse_volt:.7f}, MAE:{mae_volt:.7f}')
-        # Calculate combined/average metrics if desired (optional) - Now includes Voltage
-        mae_combined = np.mean([mae_temp, mae_soc, mae_volt])
-        mse_combined = np.mean([mse_temp, mse_soc, mse_volt])
-        rmse_combined = np.mean([rmse_temp, rmse_soc, rmse_volt])
-        print(f'Avg Scaled MSE:{mse_combined:.7f}, MAE:{mae_combined:.7f}')
+        # Calculate metrics for each feature using the canonical order for reporting
+        metrics = {}
+        print("--- Metrics Calculation ---")
+        for feature in canonical_save_order:
+            if feature in feature_to_idx: # Check if the feature exists in the current run
+                idx = feature_to_idx[feature]
+                mae, mse, rmse, _, _ = metric(preds[:, :, idx], trues[:, :, idx])
+                metrics[feature] = {'mae': mae, 'mse': mse, 'rmse': rmse}
+                print(f'{feature} -> Index in preds/trues: {idx}, MSE:{mse:.7f}, MAE:{mae:.7f}')
+            else:
+                print(f'{feature} not found in this run's features/target.')
+                metrics[feature] = {'mae': np.nan, 'mse': np.nan, 'rmse': np.nan} # Placeholder
 
-        # Calculate the number of trainable parameters
-        num_parameters = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        print(f"Number of model parameters: {num_parameters}")
+        # Calculate combined metrics (only for features present in the run)
+        valid_features = [f for f in canonical_save_order if f in feature_to_idx]
+        # Ensure np.mean gets a list of valid numbers (filter NaNs if any were added)
+        mae_list = [metrics[f]['mae'] for f in valid_features if not np.isnan(metrics[f]['mae'])]
+        mse_list = [metrics[f]['mse'] for f in valid_features if not np.isnan(metrics[f]['mse'])]
+        rmse_list = [metrics[f]['rmse'] for f in valid_features if not np.isnan(metrics[f]['rmse'])]
+        
+        mae_combined = np.mean(mae_list) if mae_list else np.nan
+        mse_combined = np.mean(mse_list) if mse_list else np.nan
+        rmse_combined = np.mean(rmse_list) if rmse_list else np.nan
+        print(f'Avg MSE (over {valid_features}):{mse_combined:.7f}, MAE:{mae_combined:.7f}')
 
-        # Append metrics and model parameters to the results file - Adjust format
+        # Save metrics in canonical order
+        print("--- Saving Metrics --- ")
         with open("result_long_term_forecast.txt", 'a') as f:
-            f.write(setting + " Scaled_Eval \n") # Indicate scaled evaluation
-            f.write(f'mse_avg_scaled:{mse_combined:.7f}, mae_avg_scaled:{mae_combined:.7f}, rmse_avg_scaled:{rmse_combined:.7f}\n')
-            # f.write(f'mse_curr:{mse_curr:.7f}, mae_curr:{mae_curr:.7f}, rmse_curr:{rmse_curr:.7f}\n') # Current not evaluated
-            f.write(f'mse_temp_scaled:{mse_temp:.7f}, mae_temp_scaled:{mae_temp:.7f}, rmse_temp_scaled:{rmse_temp:.7f}\n')
-            f.write(f'mse_soc_scaled:{mse_soc:.7f}, mae_soc_scaled:{mae_soc:.7f}, rmse_soc_scaled:{rmse_soc:.7f}\n')
-            f.write(f'mse_volt_scaled:{mse_volt:.7f}, mae_volt_scaled:{mae_volt:.7f}, rmse_volt_scaled:{rmse_volt:.7f}\n') # <-- Uncommented
-            f.write(f'parameters:{num_parameters}\n')
+            f.write(setting + " \n")
+            f.write(f'mse_avg:{mse_combined:.7f}, mae_avg:{mae_combined:.7f}, rmse_avg:{rmse_combined:.7f}\n')
+            for feature in canonical_save_order:
+                # Use lowercase for file consistency
+                f.write(f'mse_{feature.lower()}:{metrics[feature]["mse"]:.7f}, mae_{feature.lower()}:{metrics[feature]["mae"]:.7f}, rmse_{feature.lower()}:{metrics[feature]["rmse"]:.7f}\n')
             f.write('\n')
+        print(f"Metrics saved to result_long_term_forecast.txt")
 
-        np.save(folder_path + 'metrics_avg_scaled.npy', np.array([mae_combined, mse_combined, rmse_combined]))
-        # np.save(folder_path + 'metrics_curr.npy', np.array([mae_curr, mse_curr, rmse_curr]))
-        np.save(folder_path + 'metrics_temp_scaled.npy', np.array([mae_temp, mse_temp, rmse_temp]))
-        np.save(folder_path + 'metrics_soc_scaled.npy', np.array([mae_soc, mse_soc, rmse_soc]))
-        np.save(folder_path + 'metrics_volt_scaled.npy', np.array([mae_volt, mse_volt, rmse_volt])) # <-- Uncommented
-
-        np.save(folder_path + 'pred_scaled.npy', preds) # preds contains scaled Temp, SOC, and Voltage predictions
-        np.save(folder_path + 'true_scaled.npy', trues) # trues contains scaled Temp, SOC, and Voltage ground truths
-
-        # Save predictions and true values as CSV - Adjust columns
-        csv_file_path = os.path.join(folder_path, 'results_scaled.csv')
-        # Reshape for CSV: each row is one time step
+        # Save predictions and true values as CSV in canonical order
+        print("--- Saving Results CSV --- ")
+        csv_file_path = os.path.join(folder_path, 'results.csv')
         preds_flat = preds.reshape(-1, preds.shape[-1])
         trues_flat = trues.reshape(-1, trues.shape[-1])
 
-        # Get the feature order from the dataset
-        feature_order = test_data.feature_cols
-        target_col = test_data.target
-
-        # Create column names based on actual feature order
+        # Create results dictionary using canonical order for columns
         results_dict = {}
-        for i, feature in enumerate(feature_order):
-            results_dict[f'Prediction_{feature}'] = preds_flat[:, i]
-            results_dict[f'True_{feature}'] = trues_flat[:, i]
-        
-        # Add target column
-        results_dict[f'Prediction_{target_col}'] = preds_flat[:, -1]
-        results_dict[f'True_{target_col}'] = trues_flat[:, -1]
+        print(f"Feature to Index Map used: {feature_to_idx}")
+        for feature in canonical_save_order:
+            if feature in feature_to_idx:
+                idx = feature_to_idx[feature]
+                results_dict[f'Prediction_{feature}'] = preds_flat[:, idx]
+                results_dict[f'True_{feature}'] = trues_flat[:, idx]
+                print(f"Saving {feature} (Index {idx}) to CSV columns.")
+            else:
+                # Handle cases where a feature might not be present (e.g., univariate runs)
+                results_dict[f'Prediction_{feature}'] = [np.nan] * len(preds_flat)
+                results_dict[f'True_{feature}'] = [np.nan] * len(trues_flat)
+                print(f"{feature} not in model output, saving NaNs to CSV columns.")
 
         results_df = pd.DataFrame(results_dict)
-        results_df.to_csv(csv_file_path, index=False)
-        # --- End metric/saving adjustment ---
+        # Define the exact desired column order for the CSV
+        desired_csv_columns = []
+        for feature in canonical_save_order:
+            desired_csv_columns.append(f'Prediction_{feature}')
+            desired_csv_columns.append(f'True_{feature}')
+        # Filter to ensure we only try to order columns that exist in the dataframe
+        existing_desired_columns = [col for col in desired_csv_columns if col in results_df.columns]
+        results_df = results_df[existing_desired_columns] # Reorder the dataframe columns
 
-        print(f'Results saved to: {csv_file_path}')
+        results_df.to_csv(csv_file_path, index=False)
+        print(f'Results saved to: {csv_file_path} with columns in order: {list(results_df.columns)}')
 
         return
 
