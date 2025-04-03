@@ -12,18 +12,18 @@ ROOT_PATH="./data/"
 TEST_DATA="lg_test.csv" # Test data path used in the run
 FEATURES="MS"
 TARGET="Voltage"
-SEQ_LEN=200
+SEQ_LEN=200 # Ensure this matches the training run (sl200 from setting name)
 LABEL_LEN=0
 PRED_LEN=1 # Note: Simulation often implies PRED_LEN=1 step-by-step
-ENC_IN=3 # Should match training
-DEC_IN=3 # Should match training
-C_OUT=1 # Output from model layer might be ENC_IN if predicting all
-D_MODEL=32 # Should match training
-N_HEADS=4 # Should match training
-E_LAYERS=2 # Should match training
-D_LAYERS=1 # Should match training
-D_FF=64 # Should match training
-MOVING_AVG=25 # Should match training
+ENC_IN=4  # Match training ENC_IN=4 from setting: custom_small_iTransformer_custom_sl200_dm32_nh2_df128_ts20250402_194252
+DEC_IN=4  # Should match ENC_IN for iTransformer usually
+C_OUT=4   # Should match ENC_IN usually
+D_MODEL=32 # Should match training (dm32 from setting name)
+N_HEADS=2 # Should match training (nh2 from setting name)
+E_LAYERS=2 # Should match training (assuming consistent with training)
+D_LAYERS=1 # Should match training (assuming consistent with training)
+D_FF=128 # Should match training (df128 from setting name)
+MOVING_AVG=25 # Should match training (assuming consistent with training)
 FACTOR=1
 DEVICES="0,1"
 BATCH_SIZE=1 # Simulation is typically done sample by sample (batch=1)

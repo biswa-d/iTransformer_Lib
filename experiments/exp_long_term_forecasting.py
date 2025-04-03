@@ -401,6 +401,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         current_window_x = torch.from_numpy(test_data.data_x[0:seq_len]).float()
         current_window_mark = torch.from_numpy(test_data.data_stamp[0:seq_len]).float()
 
+        # <<< Move initial history to the correct device >>>
+        current_window_x = current_window_x.to(self.device)
+        current_window_mark = current_window_mark.to(self.device)
+
         # Data needed for the loop and final evaluation
         # True future currents (scaled) for input construction
         future_true_current_scaled = test_data.data_x[seq_len:, current_col_idx]
