@@ -293,14 +293,28 @@ class Dataset_Custom(Dataset):
         r_begin = s_end - self.label_len
         r_end = r_begin + self.label_len + self.pred_len
 
-        # seq_x now contains only the N input features (expecting N=3)
-        seq_x = self.data_x[s_begin:s_end]
-        # seq_y contains the N features + 1 target feature (V)
-        seq_y = self.data_y[r_begin:r_end]
-        seq_x_mark = self.data_stamp[s_begin:s_end]
-        seq_y_mark = self.data_stamp[r_begin:r_end]
+        # Input sequence: I, T, SOC from index s_begin up to s_end-1
+        seq_x = self.data_x[s_begin:s_end] # Shape [seq_len, 3]
 
-        # Inject noise during training if enabled
+        # --- Target Definition Changed ---
+        # Target value: Voltage V at the *last* time step of the input sequence (index s_end-1)
+        # self.data_y has shape [samples, 4], last column (-1) is Voltage
+        # Extract V(t) and ensure it has shape [1, 1] for consistency with model output [B, 1, 1]
+        seq_y = self.data_y[s_end - 1:s_end, -1:] # Slice to keep dimensions [1, 1]
+        # --- End Change ---
+
+        # Time features for input sequence
+        seq_x_mark = self.data_stamp[s_begin:s_end] # Shape [seq_len, num_time_features]
+
+        # --- seq_y_mark Definition Changed ---
+        # Placeholder for seq_y_mark, as it's not used by the modified model,
+        # but the DataLoader needs a consistent tuple structure.
+        # We'll use the time stamp corresponding to the target V(t), which is at index s_end-1.
+        # Shape needs to be [pred_len, num_time_features] = [1, num_time_features]
+        seq_y_mark = self.data_stamp[s_end - 1:s_end] # Slice to keep dimensions [1, num_time_features]
+        # --- End Change ---
+
+        # Inject noise (only affects seq_x) - this logic remains the same
         if self.use_noise:
             noise = np.zeros_like(seq_x) # Noise shape matches seq_x (N features)
             # Apply noise based on the actual feature names stored in self.feature_cols
@@ -313,10 +327,11 @@ class Dataset_Custom(Dataset):
                         print(f"Warning: Noise level not defined for feature '{feature_name}'")
                 else:
                     print(f"Warning: Index {i} for feature '{feature_name}' out of bounds for noise array shape {noise.shape}")
-            
+
             # Apply noise to the input sequence
             seq_x = seq_x + noise
 
+        # Return seq_x, the new seq_y (target V(t)), seq_x_mark, seq_y_mark
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
     def __len__(self):
