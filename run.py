@@ -188,12 +188,6 @@ if __name__ == '__main__':
              print(f"Error reading setting file {args.setting_file_path}: {e}")
              exit(1)
 
-        # Check if the corresponding checkpoint folder exists
-        checkpoint_path = os.path.join(args.checkpoints, setting, 'checkpoint.pth')
-        if not os.path.exists(checkpoint_path):
-             print(f"Error: Checkpoint file not found at {checkpoint_path} based on setting from {args.setting_file_path}. Ensure training completed successfully for this setting.")
-             exit(1)
-
         exp = Exp(args)  # set experiments
         # Decide whether to run test or simulation
         if args.do_simulate:

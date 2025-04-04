@@ -258,6 +258,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             # Load model from the new output path (run_outputs)
             model_path = constructed_path
             if not os.path.exists(model_path):
+                # Add another DEBUG print inside the error condition
+                print(f"ERROR_CHECK: File not found at calculated path: {model_path}", flush=True)
                 raise FileNotFoundError(f"Checkpoint not found at {model_path}. Ensure training completed successfully for this setting.")
             self.model.load_state_dict(torch.load(model_path))
 
