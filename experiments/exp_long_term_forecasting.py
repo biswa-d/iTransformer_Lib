@@ -95,12 +95,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
 
-        path = os.path.join(self.args.checkpoints, setting)
-        if not os.path.exists(path):
-            os.makedirs(path)
+        # Determine the base output path for this run
+        output_path = os.path.join('./run_outputs/', setting)
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        print(f"Outputs for this run will be saved in: {output_path}")
 
         # Save the arguments used for this run
-        args_path = os.path.join(path, 'args.json')
+        args_path = os.path.join(output_path, 'args.json')
         with open(args_path, 'w') as f:
             json.dump(vars(self.args), f, indent=4)
         print(f"Arguments saved to {args_path}")
@@ -108,7 +110,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         time_now = time.time()
 
         train_steps = len(train_loader)
-        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
+        # Pass the correct output path to EarlyStopping
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True, path=output_path)
 
         model_optim = self._select_optimizer()
         criterion = self._select_criterion()
@@ -201,7 +204,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss))
-            early_stopping(vali_loss, self.model, path)
+            early_stopping(vali_loss, self.model, output_path)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
@@ -217,7 +220,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             # get_cka(self.args, setting, self.model, train_loader, self.device, epoch)
 
-        best_model_path = path + '/' + 'checkpoint.pth'
+        best_model_path = output_path + '/' + 'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
 
         return self.model
@@ -232,28 +235,31 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         test_data, test_loader = self._get_data(flag='test', test_file=test_file)
         
         # Now data_x has 3 features, data_y has 4 (3 features + target V)
-        print(f"Test data_x shape (Input features): {test_data.data_x.shape}") 
-        print(f"Test data_y shape (Features + Target): {test_data.data_y.shape}") 
-        print(f"Test data length: {len(test_data)}")
+        # Comment out references to test_data.data_x and test_data.data_y as they no longer exist
+        # print(f"Test data_x shape (Input features): {test_data.data_x.shape}") 
+        # print(f"Test data_y shape (Features + Target): {test_data.data_y.shape}") 
+        print(f"Test data number of sequences: {len(test_data)}") # Use len() which is now correct
         print(f"Batch size: {self.args.batch_size}")
         print(f"Number of batches: {len(test_loader)}")
         
+        # Define the single output directory for this run
+        output_path = os.path.join('./run_outputs/', setting)
+        # Create the directory if it doesn't exist (e.g., if running test only)
+        os.makedirs(output_path, exist_ok=True)
+        print(f"Output files will be saved to: {output_path}")
+
         if test:
             print('loading model')
-            # Ensure model path is correct
-            model_path = os.path.join('./checkpoints/', setting, 'checkpoint.pth') 
+            # Load model from the new output path
+            model_path = os.path.join(output_path, 'checkpoint.pth') 
             if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Checkpoint not found at {model_path}")
+                raise FileNotFoundError(f"Checkpoint not found at {model_path}. Ensure training completed successfully for this setting.")
             self.model.load_state_dict(torch.load(model_path))
 
         # Store predictions (only for Voltage) and true values (only for Voltage)
         voltage_preds = []
         voltage_trues = []
         
-        folder_path = './test_results/' + setting + '/'
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-
         # Get the feature order (now only 3 input features)
         feature_order_input = test_data.feature_cols 
         target_col = self.args.target # Should be 'Voltage'
@@ -300,17 +306,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print('voltage_preds shape:', voltage_preds.shape)
         print('voltage_trues shape:', voltage_trues.shape)
         
-        # Reshape to [Samples, pred_len] if pred_len=1, or [Samples*pred_len, 1] for metric calc
+        # Reshape
         voltage_preds = voltage_preds.reshape(-1, voltage_preds.shape[-1])
         voltage_trues = voltage_trues.reshape(-1, voltage_trues.shape[-1])
         print('Final shapes after reshape for metrics:')
         print('voltage_preds shape:', voltage_preds.shape)
         print('voltage_trues shape:', voltage_trues.shape)
 
-        # --- Result saving --- 
-        folder_path = './results/' + setting + '/'
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
+        # --- Result saving (all into output_path) --- 
 
         # Calculate metrics ONLY for Voltage
         mae, mse, rmse, _, _ = metric(voltage_preds, voltage_trues)
@@ -321,18 +324,21 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f"Number of model parameters: {num_params}")
 
-        # Save metrics
-        print("--- Saving Metrics --- ")
-        with open("result_long_term_forecast.txt", 'a') as f:
-            f.write(setting + " \n")
-            # Only write voltage metrics
-            f.write(f'mse_voltage:{mse:.7f}, mae_voltage:{mae:.7f}, rmse_voltage:{rmse:.7f}\n')
-            f.write('\n')
-        print(f"Metrics saved to result_long_term_forecast.txt")
+        # Save metrics to a file within the run's output directory
+        metrics_file_path = os.path.join(output_path, 'metrics_summary.txt')
+        print(f"--- Saving Metrics to {metrics_file_path} --- ")
+        with open(metrics_file_path, 'w') as f:
+            f.write(f"Setting: {setting}\n")
+            f.write(f"Voltage MSE: {mse:.7f}\n")
+            f.write(f"Voltage MAE: {mae:.7f}\n")
+            f.write(f"Voltage RMSE: {rmse:.7f}\n")
+            f.write(f"Number of Parameters: {num_params}\n")
 
-        # Save predictions and true values as CSV (only Voltage)
+        # Save predictions and true values as CSV into the run's output directory
         print("--- Saving Results CSV --- ")
-        csv_file_path = os.path.join(folder_path, 'result_voltage_3input.csv')
+        # Use timestamp only for the filename within the setting directory
+        timestamp = setting.split('_ts')[-1] if '_ts' in setting else 'test'
+        csv_file_path = os.path.join(output_path, f'results_voltage_ts{timestamp}.csv')
         
         results_dict = {
             f'Prediction_{target_col}': voltage_preds.flatten(),
