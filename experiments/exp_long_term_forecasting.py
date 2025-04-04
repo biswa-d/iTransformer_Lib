@@ -204,7 +204,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss))
-            early_stopping(vali_loss, self.model, output_path)
+            # Call early stopping without the path argument
+            early_stopping(vali_loss, self.model)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
