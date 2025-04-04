@@ -10,9 +10,11 @@ import time
 import warnings
 import numpy as np
 import pandas as pd
+import json
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from utils.timefeatures import time_features
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 warnings.filterwarnings('ignore')
 
@@ -97,6 +99,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if not os.path.exists(path):
             os.makedirs(path)
 
+        # Save the arguments used for this run
+        args_path = os.path.join(path, 'args.json')
+        with open(args_path, 'w') as f:
+            json.dump(vars(self.args), f, indent=4)
+        print(f"Arguments saved to {args_path}")
+
         time_now = time.time()
 
         train_steps = len(train_loader)
@@ -104,6 +112,18 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         model_optim = self._select_optimizer()
         criterion = self._select_criterion()
+
+        # Initialize Scheduler
+        scheduler = None
+        if self.args.scheduler == 'cosine':
+            if self.args.cosine_T_max is None:
+                T_max = self.args.train_epochs
+            else:
+                T_max = self.args.cosine_T_max
+            scheduler = CosineAnnealingLR(model_optim, 
+                                        T_max=T_max, 
+                                        eta_min=self.args.cosine_eta_min)
+            print(f"Using CosineAnnealingLR scheduler with T_max={T_max}, eta_min={self.args.cosine_eta_min}")
 
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
@@ -186,7 +206,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 print("Early stopping")
                 break
 
-            adjust_learning_rate(model_optim, epoch + 1, self.args)
+            # Adjust learning rate based on scheduler or manual function
+            if scheduler:
+                scheduler.step()
+                # Optional: Print current LR
+                # current_lr = scheduler.get_last_lr()[0]
+                # print(f"Epoch {epoch + 1}: LR adjusted by scheduler to {current_lr:.7f}")
+            elif self.args.lradj != 'none': # Keep old adjustment if no scheduler
+                adjust_learning_rate(model_optim, epoch + 1, self.args)
 
             # get_cka(self.args, setting, self.model, train_loader, self.device, epoch)
 
@@ -485,7 +512,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             'Voltage_Scaled': {'MAE': mae_V, 'MSE': mse_V, 'RMSE': rmse_V}
         }
         with open(os.path.join(sim_results_folder, 'simulation_metrics_scaled.txt'), 'w') as f:
-            import json
             f.write(json.dumps(metrics_summary, indent=4))
         print("Simulation metrics saved.")
 

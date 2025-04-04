@@ -75,7 +75,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='test', help='exp description')
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
-    parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
+    parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate type [type1, type2]')
     parser.add_argument('--lr_decay_factor', type=float, default=0.8, help='factor for learning rate decay (used by type1 lradj)')
     parser.add_argument('--lr_decay_period', type=int, default=20, help='period for learning rate decay (used by type1 lradj)')
     parser.add_argument('--weight_decay', type=float, default=0.0, help='optimizer weight decay (e.g., 1e-4)')
@@ -104,6 +104,14 @@ if __name__ == '__main__':
     parser.add_argument('--run_timestamp', type=str, required=False, help='Timestamp for training run (required if is_training=1)') # Optional now, required only for training
     # Argument for the unique setting file path
     parser.add_argument('--setting_file_path', type=str, required=True, help='Path to the unique file storing/reading the setting name for this run')
+
+    # Scheduler arguments
+    parser.add_argument('--scheduler', type=str, default='none', 
+                        help='Learning rate scheduler type [none, cosine]')
+    parser.add_argument('--cosine_T_max', type=int, default=None, 
+                        help='T_max for CosineAnnealingLR (default: train_epochs)')
+    parser.add_argument('--cosine_eta_min', type=float, default=0.0, 
+                        help='Minimum learning rate for CosineAnnealingLR')
 
     args = parser.parse_args()
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False

@@ -37,7 +37,7 @@ MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
 TRAIN_EPOCHS=1
-BATCH_SIZE=200
+BATCH_SIZE=300
 PATIENCE=20
 LEARNING_RATE=0.0008
 DROPOUT=0.35
@@ -47,22 +47,22 @@ WEIGHT_DECAY=1e-4 # Define weight decay variable
 # Choose ONE block below
 
 # Option 1: Cosine Annealing (Recommended for current issue)
-# SCHEDULER='cosine'
-# LRADJ='none' # Ignored when scheduler is not 'none', but set for clarity
-# COSINE_T_MAX=$TRAIN_EPOCHS # Total epochs for one cosine cycle (can be overridden)
-# COSINE_ETA_MIN=0.0         # Minimum learning rate
-# # Required dummy values for other flags when using cosine:
-# LR_DECAY_FACTOR=0.8
-# LR_DECAY_PERIOD=20
+SCHEDULER='cosine'
+LRADJ='none' # Ignored when scheduler is not 'none', but set for clarity
+COSINE_T_MAX=100 # Total epochs for one cosine cycle (can be overridden)
+COSINE_ETA_MIN=0.0         # Minimum learning rate
+# Required dummy values for other flags when using cosine:
+LR_DECAY_FACTOR=0.8
+LR_DECAY_PERIOD=20
 
 # # Option 2: Periodic Exponential Decay (type1)
-SCHEDULER='none'
-LRADJ='type1'
-LR_DECAY_FACTOR=0.8 # Factor to multiply LR by (e.g., 0.8)
-LR_DECAY_PERIOD=20  # How many epochs between decays (e.g., 20)
-# Required dummy values for other flags:
-COSINE_T_MAX=$TRAIN_EPOCHS
-COSINE_ETA_MIN=0.0
+# SCHEDULER='none'
+# LRADJ='type1'
+# LR_DECAY_FACTOR=0.8 # Factor to multiply LR by (e.g., 0.8)
+# LR_DECAY_PERIOD=20  # How many epochs between decays (e.g., 20)
+# # Required dummy values for other flags:
+# COSINE_T_MAX=$TRAIN_EPOCHS
+# COSINE_ETA_MIN=0.0
 
 # # Option 3: Custom Step Decay (type2)
 # SCHEDULER='none'
