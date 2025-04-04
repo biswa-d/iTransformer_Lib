@@ -76,6 +76,9 @@ if __name__ == '__main__':
     parser.add_argument('--des', type=str, default='test', help='exp description')
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
+    parser.add_argument('--lr_decay_factor', type=float, default=0.8, help='factor for learning rate decay (used by type1 lradj)')
+    parser.add_argument('--lr_decay_period', type=int, default=20, help='period for learning rate decay (used by type1 lradj)')
+    parser.add_argument('--weight_decay', type=float, default=0.0, help='optimizer weight decay (e.g., 1e-4)')
     parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
 
     # GPU
