@@ -7,11 +7,11 @@ NOISE_SOC=0.0002     # 0.02%
 USE_NOISE=true
 
 # Add these to your python command
---noise_voltage $NOISE_VOLTAGE \
---noise_current $NOISE_CURRENT \
---noise_temp $NOISE_TEMP \
---noise_soc $NOISE_SOC \
---use_noise
+# --noise_voltage $NOISE_VOLTAGE \
+# --noise_current $NOISE_CURRENT \
+# --noise_temp $NOISE_TEMP \
+# --noise_soc $NOISE_SOC \
+# --use_noise
 
 # Create Logs directory if it doesn't exist
 mkdir -p Logs
@@ -70,6 +70,11 @@ echo "Starting training on GPUs $DEVICES..."
 python run.py --is_training 1 \
                --run_timestamp "$RUN_TIMESTAMP" \
                --setting_file_path "$SETTING_FILE_PATH" \
+               --noise_voltage $NOISE_VOLTAGE \
+               --noise_current $NOISE_CURRENT \
+               --noise_temp $NOISE_TEMP \
+               --noise_soc $NOISE_SOC \
+               --use_noise \
                --model_id "$MODEL_ID" \
                --model "$MODEL" \
                --data "$DATA" \
