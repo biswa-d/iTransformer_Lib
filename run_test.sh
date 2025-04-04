@@ -11,6 +11,7 @@ DATA="custom"
 ROOT_PATH="./data/"
 TEST_DATA="lg_test.csv" # Test data path used in the run
 FEATURES="MS"
+TARGET="Voltage" # Define the target variable
 SEQ_LEN=200
 LABEL_LEN=0
 PRED_LEN=1
@@ -35,8 +36,8 @@ DROPOUT=0.35
 
 # Array to hold arguments not explicitly handled here but needed by run.py
 OTHER_ARGS=()
-# Add use_norm=True by default based on the run log, assuming run.py accepts it directly
-OTHER_ARGS+=(--use_norm)
+# Pass use_norm 0 to disable instance normalization, consistent with training setup
+OTHER_ARGS+=(--use_norm 0)
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do

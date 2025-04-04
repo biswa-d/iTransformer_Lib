@@ -288,6 +288,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print("--- Metrics Calculation (Voltage Only) ---")
         print(f'Voltage MSE:{mse:.7f}, MAE:{mae:.7f}')
 
+        # Calculate and print the number of learnable parameters
+        num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        print(f"Number of model parameters: {num_params}")
+
         # Save metrics
         print("--- Saving Metrics --- ")
         with open("result_long_term_forecast.txt", 'a') as f:
