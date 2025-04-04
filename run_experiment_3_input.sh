@@ -41,6 +41,9 @@ BATCH_SIZE=200
 PATIENCE=20
 LEARNING_RATE=0.0008
 DROPOUT=0.35
+WEIGHT_DECAY=1e-4 # Define weight decay variable
+LR_DECAY_FACTOR=0.8 # LR decay factor for type1 schedule
+LR_DECAY_PERIOD=20  # LR decay period (epochs) for type1 schedule
 
 # Log start time and parameters
 echo "===== Training Started at $(date) ====="
@@ -83,6 +86,9 @@ python run.py --is_training 1 \
                --patience "$PATIENCE" \
                --learning_rate "$LEARNING_RATE" \
                --dropout "$DROPOUT" \
+               --weight_decay $WEIGHT_DECAY \
+               --lr_decay_factor $LR_DECAY_FACTOR \
+               --lr_decay_period $LR_DECAY_PERIOD \
                --use_norm 0 \
                --inverse
 
@@ -118,6 +124,9 @@ python run.py --is_training 0 \
                --patience "$PATIENCE" \
                --learning_rate "$LEARNING_RATE" \
                --dropout "$DROPOUT" \
+               --weight_decay $WEIGHT_DECAY \
+               --lr_decay_factor $LR_DECAY_FACTOR \
+               --lr_decay_period $LR_DECAY_PERIOD \
                --use_norm 0 \
                --inverse
 
