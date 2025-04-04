@@ -230,62 +230,66 @@ class Dataset_Custom(Dataset):
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
 
-        # Identify feature columns (excluding date and target)
-        # print(f"Reading data with target: {self.target}") # Debug print
+        # --- Identify Feature Columns (remains the same) ---
         all_columns = list(df_raw.columns)
-        # print(f"All columns found: {all_columns}") # Debug print
         feature_cols = [col for col in all_columns if col not in ['date', self.target]]
-        self.feature_cols = feature_cols # Store the names of the INPUT features
-        # print(f"Input features identified (cols_for_x): {self.feature_cols}") # Debug print
-        # print(f"Number of input features: {len(self.feature_cols)}") # Debug print
-
-        # Define columns for input (x) and target sequence base (y)
+        self.feature_cols = feature_cols
         cols_for_x = self.feature_cols
-        cols_for_y = self.feature_cols + [self.target] # y needs the target column for slicing later
-        # print(f"Columns for Y (target base): {cols_for_y}") # Debug print
+        cols_for_y = self.feature_cols + [self.target]
 
-        # Get data values for x and y
+        # --- Get Full Data First (before splitting) ---
         try:
-            data_values_x = df_raw[cols_for_x].values
-            data_values_y = df_raw[cols_for_y].values
+            data_values_x_full = df_raw[cols_for_x].values
+            data_values_y_full = df_raw[cols_for_y].values
         except KeyError as e:
              print(f"Error selecting columns: {e}. Check column names in CSV and target variable.")
              raise
 
-        # --- Adjust split logic based on flag ---
-        if self.set_type == 2: # Test flag
-            border1 = 0
-            border2 = len(df_raw)
-            print("Using full pre-scaled test data file.")
-        else: # Train or Validation flag
-            num_train = int(len(df_raw) * 0.8)
-            val_start_index = num_train
-            border1s = [0, val_start_index]
-            border2s = [num_train, len(df_raw)]
-            border1 = border1s[self.set_type]
-            border2 = border2s[self.set_type]
-            print(f"Using pre-scaled data. Train/Val split: {border1}-{border2}")
+        df_stamp_full = df_raw[['date']]
+        df_stamp_full['date'] = pd.to_datetime(df_stamp_full.date)
+        if self.timeenc == 0:
+            df_stamp_full['month'] = df_stamp_full.date.apply(lambda row: row.month, 1)
+            df_stamp_full['day'] = df_stamp_full.date.apply(lambda row: row.day, 1)
+            df_stamp_full['weekday'] = df_stamp_full.date.apply(lambda row: row.weekday(), 1)
+            df_stamp_full['hour'] = df_stamp_full.date.apply(lambda row: row.hour, 1)
+            data_stamp_full = df_stamp_full.drop(['date'], 1).values
+        elif self.timeenc == 1:
+            data_stamp_full = time_features(pd.to_datetime(df_stamp_full['date'].values), freq=self.freq)
+            data_stamp_full = data_stamp_full.transpose(1, 0)
+        # --- End Getting Full Data ---
 
-        # Assign data_x (only input features) and data_y (features + target)
-        self.data_x = data_values_x[border1:border2]
-        self.data_y = data_values_y[border1:border2]
+        # --- Split Logic based on flag (Train/Val Random Split, Test Separate File) ---
+        num_total = len(df_raw)
+        if self.set_type == 2: # Test flag - Use full data (which comes from test file path)
+            border1 = 0
+            border2 = num_total
+            print(f"Using full pre-scaled test data file. Length: {num_total}")
+            self.data_x = data_values_x_full[border1:border2]
+            self.data_y = data_values_y_full[border1:border2]
+            self.data_stamp = data_stamp_full[border1:border2]
+        else: # Train or Validation flag - Split randomly
+            num_train = int(num_total * 0.8) # 80% for training
+            num_vali = num_total - num_train # 20% for validation
+            
+            # Generate shuffled indices ONCE
+            permuted_indices = np.random.permutation(num_total)
+            train_indices = permuted_indices[:num_train]
+            vali_indices = permuted_indices[num_train:]
+            
+            if self.set_type == 0: # Train flag
+                print(f"Using randomly shuffled 80% for training. Length: {num_train}")
+                self.data_x = data_values_x_full[train_indices]
+                self.data_y = data_values_y_full[train_indices]
+                self.data_stamp = data_stamp_full[train_indices]
+            else: # Validation flag (set_type == 1)
+                print(f"Using randomly shuffled 20% for validation. Length: {num_vali}")
+                self.data_x = data_values_x_full[vali_indices]
+                self.data_y = data_values_y_full[vali_indices]
+                self.data_stamp = data_stamp_full[vali_indices]
+                
         # print(f"Shape of self.data_x (input features): {self.data_x.shape}") # Debug print
         # print(f"Shape of self.data_y (features + target): {self.data_y.shape}") # Debug print
-
-        # --- Time Stamp Processing (remains the same) ---
-        df_stamp = df_raw[['date']][border1:border2]
-        df_stamp['date'] = pd.to_datetime(df_stamp.date)
-        if self.timeenc == 0:
-            df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
-            df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
-            df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
-            df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
-            data_stamp = df_stamp.drop(['date'], 1).values
-        elif self.timeenc == 1:
-            data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
-            data_stamp = data_stamp.transpose(1, 0)
-        self.data_stamp = data_stamp
-        # --- End Time Stamp Processing ---
+        # print(f"Shape of self.data_stamp: {self.data_stamp.shape}") # Debug print
 
     def __getitem__(self, index):
         s_begin = index
