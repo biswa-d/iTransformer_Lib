@@ -133,26 +133,26 @@ echo "Testing with Data Path: $TEST_DATA"
 
 # --- Execute Testing ---
 echo "Starting testing on GPUs $DEVICES using setting from $SETTING_FILE_PATH..."
-python run.py --is_training 0 \\
-               --setting_file_path "$SETTING_FILE_PATH" \\
-               --model_id "$MODEL_ID" \\
-               --model "$MODEL" \\
-               --data "$DATA" \\
-               --root_path "$ROOT_PATH" \\
-               --data_path "$TEST_DATA" \\
-               --features "$FEATURES" \\
-               --target "$TARGET" \\
-               --seq_len "$SEQ_LEN" \\
-               --label_len "$LABEL_LEN" \\
-               --pred_len "$PRED_LEN" \\
-               --enc_in "$ENC_IN" \\
-               --dec_in "$DEC_IN" \\
-               --c_out "$C_OUT" \\
-               --d_model "$D_MODEL" \\
-               --n_heads "$N_HEADS" \\
-               --e_layers "$E_LAYERS" \\
-               --d_layers "$D_LAYERS" \\
-               --d_ff "$D_FF" \\
+python run.py --is_training 0 \
+               --setting_file_path "$SETTING_FILE_PATH" \
+               --model_id "$MODEL_ID" \
+               --model "$MODEL" \
+               --data "$DATA" \
+               --root_path "$ROOT_PATH" \
+               --data_path "$TEST_DATA" \
+               --features "$FEATURES" \
+               --target "$TARGET" \
+               --seq_len "$SEQ_LEN" \
+               --label_len "$LABEL_LEN" \
+               --pred_len "$PRED_LEN" \
+               --enc_in "$ENC_IN" \
+               --dec_in "$DEC_IN" \
+               --c_out "$C_OUT" \
+               --d_model "$D_MODEL" \
+               --n_heads "$N_HEADS" \
+               --e_layers "$E_LAYERS" \
+               --d_layers "$D_LAYERS" \
+               --d_ff "$D_FF" \
                --moving_avg "$MOVING_AVG" \
                --factor "$FACTOR" \
                --devices "$DEVICES" \
