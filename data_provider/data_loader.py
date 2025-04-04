@@ -220,27 +220,34 @@ class Dataset_Custom(Dataset):
             'Temp': noise_temp,
             'SOC': noise_soc
         }
-        self.use_noise = use_noise and (flag == 'train')  # Only inject noise during training
+        self.use_noise = use_noise 
         
         self.root_path = root_path
         self.data_path = data_path
+        
+        # Store full data arrays
+        self.data_x_full = None
+        self.data_y_full = None
+        self.data_stamp_full = None
+        self.feature_cols = None
+        self.valid_start_indices = None # Indices for sequences
+        
         self.__read_data__()
 
     def __read_data__(self):
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
 
-        # --- Identify Feature Columns (remains the same) ---
+        # --- Identify Feature Columns ---
         all_columns = list(df_raw.columns)
-        feature_cols = [col for col in all_columns if col not in ['date', self.target]]
-        self.feature_cols = feature_cols
+        self.feature_cols = [col for col in all_columns if col not in ['date', self.target]]
         cols_for_x = self.feature_cols
         cols_for_y = self.feature_cols + [self.target]
 
-        # --- Get Full Data First (before splitting) ---
+        # --- Get and Store Full Original Data ---
         try:
-            data_values_x_full = df_raw[cols_for_x].values
-            data_values_y_full = df_raw[cols_for_y].values
+            self.data_x_full = df_raw[cols_for_x].values
+            self.data_y_full = df_raw[cols_for_y].values
         except KeyError as e:
              print(f"Error selecting columns: {e}. Check column names in CSV and target variable.")
              raise
@@ -252,76 +259,58 @@ class Dataset_Custom(Dataset):
             df_stamp_full['day'] = df_stamp_full.date.apply(lambda row: row.day, 1)
             df_stamp_full['weekday'] = df_stamp_full.date.apply(lambda row: row.weekday(), 1)
             df_stamp_full['hour'] = df_stamp_full.date.apply(lambda row: row.hour, 1)
-            data_stamp_full = df_stamp_full.drop(['date'], 1).values
+            self.data_stamp_full = df_stamp_full.drop(['date'], 1).values
         elif self.timeenc == 1:
-            data_stamp_full = time_features(pd.to_datetime(df_stamp_full['date'].values), freq=self.freq)
-            data_stamp_full = data_stamp_full.transpose(1, 0)
+            data_stamp_raw = time_features(pd.to_datetime(df_stamp_full['date'].values), freq=self.freq)
+            self.data_stamp_full = data_stamp_raw.transpose(1, 0)
         # --- End Getting Full Data ---
 
-        # --- Split Logic based on flag (Train/Val Random Split, Test Separate File) ---
-        num_total = len(df_raw)
-        if self.set_type == 2: # Test flag - Use full data (which comes from test file path)
-            border1 = 0
-            border2 = num_total
-            print(f"Using full pre-scaled test data file. Length: {num_total}")
-            self.data_x = data_values_x_full[border1:border2]
-            self.data_y = data_values_y_full[border1:border2]
-            self.data_stamp = data_stamp_full[border1:border2]
-        else: # Train or Validation flag - Split randomly
-            num_train = int(num_total * 0.8) # 80% for training
-            num_vali = num_total - num_train # 20% for validation
-            
-            # Generate shuffled indices ONCE
-            permuted_indices = np.random.permutation(num_total)
-            train_indices = permuted_indices[:num_train]
-            vali_indices = permuted_indices[num_train:]
-            
+        num_total_samples = len(df_raw)
+        num_possible_sequences = num_total_samples - self.seq_len - self.pred_len + 1
+        if num_possible_sequences <= 0:
+             raise ValueError(f"Dataset length ({num_total_samples}) is too short for seq_len={self.seq_len} and pred_len={self.pred_len}")
+
+        # --- Split Logic (Train/Val Random Split of Sequence Indices, Test Uses Full File) ---
+        if self.set_type == 2: # Test flag - Use all possible sequences from the test file
+            print(f"Using full pre-scaled test data file. Num possible sequences: {num_possible_sequences}")
+            # For test set, valid indices are just 0 to num_possible_sequences-1
+            self.valid_start_indices = np.arange(num_possible_sequences)
+        else: # Train or Validation flag - Split randomly based on sequence start indices
+            # Calculate split point for sequence indices
+            num_train_seq = int(num_possible_sequences * 0.8)
+            num_vali_seq = num_possible_sequences - num_train_seq
+
+            # Generate shuffled sequence start indices ONCE
+            all_start_indices = np.arange(num_possible_sequences)
+            permuted_start_indices = np.random.permutation(all_start_indices)
+            train_seq_indices = permuted_start_indices[:num_train_seq]
+            vali_seq_indices = permuted_start_indices[num_train_seq:]
+
             if self.set_type == 0: # Train flag
-                print(f"Using randomly shuffled 80% for training. Length: {num_train}")
-                self.data_x = data_values_x_full[train_indices]
-                self.data_y = data_values_y_full[train_indices]
-                self.data_stamp = data_stamp_full[train_indices]
+                print(f"Using {num_train_seq} randomly selected sequences for training (80%)")
+                self.valid_start_indices = train_seq_indices
             else: # Validation flag (set_type == 1)
-                print(f"Using randomly shuffled 20% for validation. Length: {num_vali}")
-                self.data_x = data_values_x_full[vali_indices]
-                self.data_y = data_values_y_full[vali_indices]
-                self.data_stamp = data_stamp_full[vali_indices]
-                
-        # print(f"Shape of self.data_x (input features): {self.data_x.shape}") # Debug print
-        # print(f"Shape of self.data_y (features + target): {self.data_y.shape}") # Debug print
-        # print(f"Shape of self.data_stamp: {self.data_stamp.shape}") # Debug print
+                print(f"Using {num_vali_seq} randomly selected sequences for validation (20%)")
+                self.valid_start_indices = vali_seq_indices
 
     def __getitem__(self, index):
-        s_begin = index
+        # Use the index to get the actual start position from the shuffled list
+        s_begin = self.valid_start_indices[index]
         s_end = s_begin + self.seq_len
-        r_begin = s_end - self.label_len
-        r_end = r_begin + self.label_len + self.pred_len
 
-        # Input sequence: I, T, SOC from index s_begin up to s_end-1
-        seq_x = self.data_x[s_begin:s_end] # Shape [seq_len, 3]
+        # Slice the sequence from the *original full* data arrays
+        seq_x = self.data_x_full[s_begin:s_end]
+        seq_x_mark = self.data_stamp_full[s_begin:s_end]
 
-        # --- Target Definition Changed ---
-        # Target value: Voltage V at the *last* time step of the input sequence (index s_end-1)
-        # self.data_y has shape [samples, 4], last column (-1) is Voltage
-        # Extract V(t) and ensure it has shape [1, 1] for consistency with model output [B, 1, 1]
-        seq_y = self.data_y[s_end - 1:s_end, -1:] # Slice to keep dimensions [1, 1]
-        # --- End Change ---
+        # Target value V(t) is at the end of the input sequence window
+        seq_y = self.data_y_full[s_end - 1:s_end, -1:] # Shape [1, 1]
+        
+        # Corresponding time mark for the target
+        seq_y_mark = self.data_stamp_full[s_end - 1:s_end] # Shape [1, num_time_features]
 
-        # Time features for input sequence
-        seq_x_mark = self.data_stamp[s_begin:s_end] # Shape [seq_len, num_time_features]
-
-        # --- seq_y_mark Definition Changed ---
-        # Placeholder for seq_y_mark, as it's not used by the modified model,
-        # but the DataLoader needs a consistent tuple structure.
-        # We'll use the time stamp corresponding to the target V(t), which is at index s_end-1.
-        # Shape needs to be [pred_len, num_time_features] = [1, num_time_features]
-        seq_y_mark = self.data_stamp[s_end - 1:s_end] # Slice to keep dimensions [1, num_time_features]
-        # --- End Change ---
-
-        # Inject noise (only affects seq_x) - this logic remains the same
+        # Inject noise (only affects seq_x)
         if self.use_noise:
             noise = np.zeros_like(seq_x) # Noise shape matches seq_x (N features)
-            # Apply noise based on the actual feature names stored in self.feature_cols
             for i, feature_name in enumerate(self.feature_cols):
                 if i < noise.shape[1]: # Ensure index is valid for noise array
                     if feature_name in self.noise_map:
@@ -331,16 +320,13 @@ class Dataset_Custom(Dataset):
                         print(f"Warning: Noise level not defined for feature '{feature_name}'")
                 else:
                     print(f"Warning: Index {i} for feature '{feature_name}' out of bounds for noise array shape {noise.shape}")
-
-            # Apply noise to the input sequence
             seq_x = seq_x + noise
 
-        # Return seq_x, the new seq_y (target V(t)), seq_x_mark, seq_y_mark
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
     def __len__(self):
-        length = len(self.data_x) - self.seq_len - self.pred_len + 1
-        return max(0, length) 
+        # The length is the number of sequences selected for this set (train/val/test)
+        return len(self.valid_start_indices)
 
     def inverse_transform(self, data):
         print("Warning: inverse_transform called, but data is pre-scaled externally. Returning data as is.")
