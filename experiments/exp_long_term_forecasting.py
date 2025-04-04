@@ -251,8 +251,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         if test:
             print('loading model')
-            # Load model from the new output path
-            model_path = os.path.join(output_path, 'checkpoint.pth') 
+            # Load model from the new output path (run_outputs)
+            model_path = os.path.join('./run_outputs/', setting, 'checkpoint.pth') 
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Checkpoint not found at {model_path}. Ensure training completed successfully for this setting.")
             self.model.load_state_dict(torch.load(model_path))
