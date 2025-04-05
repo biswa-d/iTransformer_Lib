@@ -259,17 +259,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Batch size: {self.args.batch_size}")
         print(f"Number of batches: {len(test_loader)}")
         
-        # Determine the base output directory based on k_folds
-        base_output_dir = './run_cv/' if self.args.k_folds > 0 else './run_outputs/'
-        output_path = os.path.join(base_output_dir, setting)
-        # Create the directory if it doesn't exist (e.g., if running test only)
+        # <<< Determine the correct base directory for loading/saving >>>
+        # The 'setting' identifies the specific run. Check if it was a CV fold.
+        is_cv_run = '_fold' in setting 
+        load_save_base_dir = './run_cv/' if is_cv_run else './run_outputs/'
+        output_path = os.path.join(load_save_base_dir, setting)
+        # Ensure the directory exists (it should from training, but check)
         os.makedirs(output_path, exist_ok=True)
         print(f"Output files will be saved to: {output_path}")
 
         if test:
             print('loading model')
-            # Construct path using the determined base directory
-            constructed_path = os.path.join(base_output_dir, setting, 'checkpoint.pth')
+            # <<< Construct path using the CORRECT base directory >>>
+            constructed_path = os.path.join(load_save_base_dir, setting, 'checkpoint.pth')
             # Force flush the output
             print(f"DEBUG: Attempting to load model from: {constructed_path}", flush=True) 
             # Load model from the constructed path
@@ -335,7 +337,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print('voltage_preds shape:', voltage_preds.shape)
         print('voltage_trues shape:', voltage_trues.shape)
 
-        # --- Result saving (all into output_path) --- 
+        # --- Result saving (all into output_path, which is now correctly determined) --- 
 
         # Calculate metrics ONLY for Voltage
         mae, mse, rmse, _, _ = metric(voltage_preds, voltage_trues)
