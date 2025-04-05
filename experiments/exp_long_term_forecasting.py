@@ -238,9 +238,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             # --- SWA Step --- 
             if self.args.use_swa and epoch >= swa_start_epoch:
-                swa_model.update() # Update SWA averages
                 swa_scheduler.step() # Step SWA LR scheduler
-                # print(f"Epoch {epoch+1}: SWA model updated. SWA LR: {swa_scheduler.get_last_lr()[0]:.7f}")
+                # The AveragedModel wrapper handles averaging internally or upon finalization
+                # print(f"Epoch {epoch+1}: SWA LR stepped. SWA LR: {swa_scheduler.get_last_lr()[0]:.7f}")
             # --- End SWA Step ---
             else:
                  # --- Regular LR Scheduling Step (before SWA starts) ---
