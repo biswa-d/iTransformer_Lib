@@ -35,6 +35,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if flag == 'test' and test_file:
             self.args.data_path = test_file  # Use the provided test file path
 
+        # <<<--- Add Debug Print Here --->>>
+        print(f"[DEBUG] In _get_data (flag='{flag}'), using self.args.data_path: {self.args.data_path}")
+        # <<<--------------------------->>>
+
         # Call the data_provider with updated args
         data_set, data_loader = data_provider(self.args, flag)
         return data_set, data_loader
@@ -222,7 +226,18 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             # get_cka(self.args, setting, self.model, train_loader, self.device, epoch)
 
-        best_model_path = output_path + '/' + 'checkpoint.pth'
+        # --- Save Best Validation Loss --- 
+        best_val_loss = early_stopping.val_loss_min
+        val_loss_file_path = os.path.join(output_path, 'best_vali_loss.txt')
+        try:
+            with open(val_loss_file_path, 'w') as f:
+                f.write(f"{best_val_loss:.7f}")
+            print(f"Best validation loss ({best_val_loss:.7f}) saved to {val_loss_file_path}")
+        except Exception as e:
+            print(f"Error saving best validation loss: {e}")
+        # --- End Save --- 
+
+        best_model_path = os.path.join(output_path, 'checkpoint.pth') # Use output_path directly
         self.model.load_state_dict(torch.load(best_model_path))
 
         return self.model
