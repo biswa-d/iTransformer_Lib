@@ -38,7 +38,6 @@ FACTOR=1
 DEVICES="0,1"
 TRAIN_EPOCHS=300
 BATCH_SIZE=200
-NUM_WORKERS=10 # Set number of data loader workers
 PATIENCE=20
 LEARNING_RATE=0.0008
 DROPOUT=0.35
@@ -114,7 +113,6 @@ python run.py --is_training 1 \
                --devices "$DEVICES" \
                --train_epochs "$TRAIN_EPOCHS" \
                --batch_size "$BATCH_SIZE" \
-               --num_workers $NUM_WORKERS \
                --patience "$PATIENCE" \
                --learning_rate "$LEARNING_RATE" \
                --dropout "$DROPOUT" \
@@ -158,7 +156,6 @@ python run.py --is_training 0 \
                --devices "$DEVICES" \
                --train_epochs "$TRAIN_EPOCHS" \
                --batch_size "$BATCH_SIZE" \
-               --num_workers $NUM_WORKERS \
                --patience "$PATIENCE" \
                --learning_rate "$LEARNING_RATE" \
                --dropout "$DROPOUT" \

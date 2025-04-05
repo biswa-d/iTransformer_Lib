@@ -113,6 +113,10 @@ if __name__ == '__main__':
     parser.add_argument('--cosine_eta_min', type=float, default=0.0, 
                         help='Minimum learning rate for CosineAnnealingLR')
 
+    # K-Fold Cross-Validation Arguments
+    parser.add_argument('--k_folds', type=int, default=0, help='Number of folds for K-Fold CV (0 means disabled)')
+    parser.add_argument('--fold', type=int, default=0, help='Current fold index (0 to k_folds-1) for K-Fold CV')
+
     args = parser.parse_args()
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
 

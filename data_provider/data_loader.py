@@ -191,7 +191,8 @@ class Dataset_Custom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='ETTh1.csv',
                  target='OT', scale=True, timeenc=0, freq='h',
-                 noise_voltage=0.005, noise_current=0.003, noise_temp=0.001, noise_soc=0.0002, use_noise=True):
+                 noise_voltage=0.005, noise_current=0.003, noise_temp=0.001, noise_soc=0.0002, use_noise=True,
+                 k_folds=0, fold=0):
         # size [seq_len, label_len, pred_len]
         # info
         if size == None:
@@ -224,6 +225,10 @@ class Dataset_Custom(Dataset):
         
         self.root_path = root_path
         self.data_path = data_path
+        
+        # K-Fold params
+        self.k_folds = k_folds
+        self.fold = fold
         
         # Store full data arrays
         self.data_x_full = None
@@ -275,23 +280,43 @@ class Dataset_Custom(Dataset):
             print(f"Using full pre-scaled test data file. Num possible sequences: {num_possible_sequences}")
             # For test set, valid indices are just 0 to num_possible_sequences-1
             self.valid_start_indices = np.arange(num_possible_sequences)
-        else: # Train or Validation flag - Split randomly based on sequence start indices
-            # Calculate split point for sequence indices
-            num_train_seq = int(num_possible_sequences * 0.8)
-            num_vali_seq = num_possible_sequences - num_train_seq
+        else: # Train or Validation flag
+            if self.k_folds > 1: # K-Fold Cross-Validation logic
+                 if self.fold >= self.k_folds:
+                      raise ValueError(f"Current fold ({self.fold}) must be less than k_folds ({self.k_folds})")
+                 
+                 print(f"Using K-Fold CV: {self.k_folds} folds, current fold {self.fold}")
+                 all_start_indices = np.arange(num_possible_sequences)
+                 # Ensure consistent shuffle across folds if using fixed seed
+                 permuted_start_indices = np.random.permutation(all_start_indices)
+                 
+                 # Split indices into K folds
+                 fold_indices = np.array_split(permuted_start_indices, self.k_folds)
+                 
+                 if self.set_type == 1: # Validation flag - use the k-th fold
+                     self.valid_start_indices = fold_indices[self.fold]
+                     print(f"  Assigning fold {self.fold} ({len(self.valid_start_indices)} sequences) for validation.")
+                 else: # Training flag - use all other folds
+                     train_folds_indices = [fold_indices[i] for i in range(self.k_folds) if i != self.fold]
+                     self.valid_start_indices = np.concatenate(train_folds_indices)
+                     print(f"  Assigning folds {[i for i in range(self.k_folds) if i != self.fold]} ({len(self.valid_start_indices)} sequences) for training.")
+            
+            else: # Original 80/20 random split logic
+                 num_train_seq = int(num_possible_sequences * 0.8)
+                 num_vali_seq = num_possible_sequences - num_train_seq
 
-            # Generate shuffled sequence start indices ONCE
-            all_start_indices = np.arange(num_possible_sequences)
-            permuted_start_indices = np.random.permutation(all_start_indices)
-            train_seq_indices = permuted_start_indices[:num_train_seq]
-            vali_seq_indices = permuted_start_indices[num_train_seq:]
+                 # Generate shuffled sequence start indices ONCE
+                 all_start_indices = np.arange(num_possible_sequences)
+                 permuted_start_indices = np.random.permutation(all_start_indices)
+                 train_seq_indices = permuted_start_indices[:num_train_seq]
+                 vali_seq_indices = permuted_start_indices[num_train_seq:]
 
-            if self.set_type == 0: # Train flag
-                print(f"Using {num_train_seq} randomly selected sequences for training (80%)")
-                self.valid_start_indices = train_seq_indices
-            else: # Validation flag (set_type == 1)
-                print(f"Using {num_vali_seq} randomly selected sequences for validation (20%)")
-                self.valid_start_indices = vali_seq_indices
+                 if self.set_type == 0: # Train flag
+                     print(f"Using {num_train_seq} randomly selected sequences for training (80%)")
+                     self.valid_start_indices = train_seq_indices
+                 else: # Validation flag (set_type == 1)
+                     print(f"Using {num_vali_seq} randomly selected sequences for validation (20%)")
+                     self.valid_start_indices = vali_seq_indices
 
     def __getitem__(self, index):
         # Use the index to get the actual start position from the shuffled list

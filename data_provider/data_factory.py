@@ -48,7 +48,9 @@ def data_provider(args, flag):
         noise_current=args.noise_current,
         noise_temp=args.noise_temp,
         noise_soc=args.noise_soc,
-        use_noise=use_noise
+        use_noise=use_noise,
+        k_folds=args.k_folds,
+        fold=args.fold
     )
     print(flag, len(data_set))
     data_loader = DataLoader(

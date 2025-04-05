@@ -32,11 +32,11 @@ D_MODEL=32
 N_HEADS=2
 E_LAYERS=2
 D_LAYERS=1
-D_FF=16
+D_FF=128
 MOVING_AVG=25
 FACTOR=1
 DEVICES="0,1"
-TRAIN_EPOCHS=300
+TRAIN_EPOCHS=1
 BATCH_SIZE=200
 PATIENCE=20
 LEARNING_RATE=0.0008
@@ -124,7 +124,6 @@ python run.py --is_training 1 \
                --cosine_T_max $COSINE_T_MAX \
                --cosine_eta_min $COSINE_ETA_MIN \
                --use_norm 0 \
-               --use_amp \
                --inverse
 
 echo "Training finished."
@@ -167,7 +166,6 @@ python run.py --is_training 0 \
                --cosine_T_max $COSINE_T_MAX \
                --cosine_eta_min $COSINE_ETA_MIN \
                --use_norm 0 \
-               --use_amp \
                --inverse
 
 echo "Script finished."
