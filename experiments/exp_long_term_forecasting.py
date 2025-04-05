@@ -15,6 +15,9 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from utils.timefeatures import time_features
 from torch.optim.lr_scheduler import CosineAnnealingLR
+# <<< SWA Imports >>>
+from torch.optim.swa_utils import AveragedModel, SWALR
+# <<< End SWA Imports >>>
 
 warnings.filterwarnings('ignore')
 
@@ -34,6 +37,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # Override data_path for the 'test' flag if test_file is provided
         if flag == 'test' and test_file:
             self.args.data_path = test_file  # Use the provided test file path
+
+        # <<<--- Add Debug Print Here --->>>
+        print(f"[DEBUG] In _get_data (flag='{flag}'), using self.args.data_path: {self.args.data_path}")
+        # <<<--------------------------->>>
 
         # Call the data_provider with updated args
         data_set, data_loader = data_provider(self.args, flag)
@@ -95,8 +102,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
 
-        # Determine the base output path for this run
-        output_path = os.path.join('./run_outputs/', setting)
+        # Determine the base output path for this run based on k_folds and cv_run_dir
+        if self.args.k_folds > 0 and self.args.cv_run_dir:
+            base_output_dir = self.args.cv_run_dir # Use the specific CV run dir passed from shell
+        elif self.args.k_folds > 0:
+            base_output_dir = './run_cv/' # Fallback if cv_run_dir not provided
+        else:
+            base_output_dir = './run_outputs/' # Standard output dir
+
+        output_path = os.path.join(base_output_dir, setting)
         if not os.path.exists(output_path):
             os.makedirs(output_path)
         print(f"Outputs for this run will be saved in: {output_path}")
@@ -116,17 +130,42 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         model_optim = self._select_optimizer()
         criterion = self._select_criterion()
 
-        # Initialize Scheduler
+        # Initialize Main Scheduler
         scheduler = None
         if self.args.scheduler == 'cosine':
-            if self.args.cosine_T_max is None:
-                T_max = self.args.train_epochs
-            else:
+            # If using SWA, the main scheduler might run for fewer epochs
+            T_max = self.args.train_epochs
+            if self.args.use_swa:
+                T_max = int(self.args.train_epochs * self.args.swa_start_frac)
+                print(f"Main Cosine scheduler T_max adjusted to {T_max} for SWA start")
+            # Override T_max if cosine_T_max is explicitly set
+            if self.args.cosine_T_max is not None:
                 T_max = self.args.cosine_T_max
+                print(f"Using explicitly set cosine_T_max: {T_max}")
+            
             scheduler = CosineAnnealingLR(model_optim, 
                                         T_max=T_max, 
                                         eta_min=self.args.cosine_eta_min)
             print(f"Using CosineAnnealingLR scheduler with T_max={T_max}, eta_min={self.args.cosine_eta_min}")
+
+        # --- Initialize SWA (if enabled) ---
+        swa_model = None
+        swa_scheduler = None
+        swa_start_epoch = self.args.train_epochs # Default to never starting if not use_swa
+        if self.args.use_swa:
+            print("--- SWA Enabled --- ")
+            swa_model = AveragedModel(self.model) # Wrap the model
+            swa_start_epoch = int(self.args.train_epochs * self.args.swa_start_frac)
+            swa_lr = self.args.swa_lr if self.args.swa_lr is not None else self.args.learning_rate
+            print(f"SWA starting at epoch: {swa_start_epoch}")
+            print(f"SWA LR: {swa_lr}")
+            print(f"SWA Anneal Epochs: {self.args.swa_anneal_epochs}")
+            # SWA scheduler starts after the main scheduler finishes (or at swa_start_epoch)
+            swa_scheduler = SWALR(model_optim, 
+                                swa_lr=swa_lr, 
+                                anneal_epochs=self.args.swa_anneal_epochs, 
+                                anneal_strategy='cos') # Use cosine annealing for SWA LR
+        # --- End SWA Init ---
 
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
@@ -197,6 +236,20 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     loss.backward()
                     model_optim.step()
 
+            # --- SWA Step --- 
+            if self.args.use_swa and epoch >= swa_start_epoch:
+                swa_model.update() # Update SWA averages
+                swa_scheduler.step() # Step SWA LR scheduler
+                # print(f"Epoch {epoch+1}: SWA model updated. SWA LR: {swa_scheduler.get_last_lr()[0]:.7f}")
+            # --- End SWA Step ---
+            else:
+                 # --- Regular LR Scheduling Step (before SWA starts) ---
+                 if scheduler:
+                     scheduler.step()
+                 elif self.args.lradj != 'none': # Keep old adjustment if no scheduler
+                     adjust_learning_rate(model_optim, epoch + 1, self.args)
+                 # --- End Regular LR Step --- 
+
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
@@ -204,25 +257,68 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss))
-            # Call early stopping without the path argument
-            early_stopping(vali_loss, self.model)
+            
+            # --- Early Stopping Logic --- 
+            # Decide whether to stop based on pre-SWA model performance
+            # Or potentially evaluate swa_model on validation set periodically?
+            # Current setup: Stops based on the original model's val loss.
+            # SWA model is only finalized at the end.
+            early_stopping(vali_loss, self.model) 
             if early_stopping.early_stop:
-                print("Early stopping")
+                print("Early stopping triggered.")
                 break
+            # --- End Early Stopping --- 
 
             # Adjust learning rate based on scheduler or manual function
-            if scheduler:
-                scheduler.step()
-                # Optional: Print current LR
-                # current_lr = scheduler.get_last_lr()[0]
-                # print(f"Epoch {epoch + 1}: LR adjusted by scheduler to {current_lr:.7f}")
-            elif self.args.lradj != 'none': # Keep old adjustment if no scheduler
-                adjust_learning_rate(model_optim, epoch + 1, self.args)
+            # Moved LR step logic above to handle SWA scheduler timing
+            
+        # --- Finalize SWA Model (if used) --- 
+        final_model_to_save = self.model
+        if self.args.use_swa:
+            # Potentially update BN stats if needed (LayerNorm might not require it)
+            # print("Updating SWA model BN statistics...")
+            # torch.optim.swa_utils.update_bn(train_loader, swa_model, device=self.device)
+            # print("SWA BN update complete.")
+            final_model_to_save = swa_model # Use the averaged model
+            print("Using SWA averaged model for saving.")
+        else:
+             # Load the best model saved by early stopping if NOT using SWA
+             print("Loading best model based on validation loss (Early Stopping checkpoint).")
+             best_model_path_es = os.path.join(output_path, 'checkpoint.pth') 
+             try:
+                 self.model.load_state_dict(torch.load(best_model_path_es))
+                 final_model_to_save = self.model
+             except Exception as e:
+                 print(f"Error loading early stopping checkpoint {best_model_path_es}: {e}")
+                 print("Proceeding with the model state at the end of training.")
+                 # Keep final_model_to_save as self.model in its current state
 
-            # get_cka(self.args, setting, self.model, train_loader, self.device, epoch)
+        # --- Save Best Validation Loss (from EarlyStopping) --- 
+        best_val_loss = early_stopping.val_loss_min
+        val_loss_file_path = os.path.join(output_path, 'best_vali_loss.txt')
+        try:
+            with open(val_loss_file_path, 'w') as f:
+                f.write(f"{best_val_loss:.7f}")
+            print(f"Best validation loss during training ({best_val_loss:.7f}) saved to {val_loss_file_path}")
+        except Exception as e:
+            print(f"Error saving best validation loss: {e}")
+        # --- End Save --- 
 
-        best_model_path = output_path + '/' + 'checkpoint.pth'
-        self.model.load_state_dict(torch.load(best_model_path))
+        # <<< Save the chosen final model (SWA or best ES model) >>>
+        final_model_path = os.path.join(output_path, 'final_model.pth') 
+        try:
+            # Note: AveragedModel needs module access for state_dict
+            torch.save(final_model_to_save.module.state_dict() if isinstance(final_model_to_save, AveragedModel) else final_model_to_save.state_dict(), final_model_path)
+            print(f"Final model state dict saved to {final_model_path}")
+        except Exception as e:
+            print(f"Error saving final model state dict: {e}")
+
+        # Load the final saved model state into self.model for potential immediate testing
+        try:
+            self.model.load_state_dict(torch.load(final_model_path))
+            print("Loaded final model state into self.model")
+        except Exception as e:
+             print(f"Error loading final model state into self.model: {e}")
 
         return self.model
 
@@ -243,25 +339,36 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Batch size: {self.args.batch_size}")
         print(f"Number of batches: {len(test_loader)}")
         
-        # Define the single output directory for this run
-        output_path = os.path.join('./run_outputs/', setting)
-        # Create the directory if it doesn't exist (e.g., if running test only)
+        # Determine the correct base directory for loading/saving
+        # The 'setting' identifies the specific run.
+        setting_base_dir = None
+        if self.args.cv_run_dir: # If CV base dir is provided, use it
+            setting_base_dir = self.args.cv_run_dir
+        else: # Otherwise, infer based on setting name (fallback/standard runs)
+            is_cv_run_inferred = '_fold' in setting 
+            setting_base_dir = './run_cv/' if is_cv_run_inferred else './run_outputs/'
+            
+        output_path = os.path.join(setting_base_dir, setting)
+        # Ensure the directory exists (it should from training, but check)
         os.makedirs(output_path, exist_ok=True)
-        print(f"Output files will be saved to: {output_path}")
+        print(f"Output files will be saved/loaded relative to: {output_path}")
 
         if test:
             print('loading model')
-            # Add DEBUG print
-            constructed_path = os.path.join('./run_outputs/', setting, 'checkpoint.pth')
+            # Construct path using the determined base directory and setting
+            # <<< Load the final_model.pth instead of checkpoint.pth >>>
+            model_load_path = os.path.join(setting_base_dir, setting, 'final_model.pth') 
             # Force flush the output
-            print(f"DEBUG: Attempting to load model from: {constructed_path}", flush=True) 
-            # Load model from the new output path (run_outputs)
-            model_path = constructed_path
-            if not os.path.exists(model_path):
-                # Add another DEBUG print inside the error condition
-                print(f"ERROR_CHECK: File not found at calculated path: {model_path}", flush=True)
-                raise FileNotFoundError(f"Checkpoint not found at {model_path}. Ensure training completed successfully for this setting.")
-            self.model.load_state_dict(torch.load(model_path))
+            print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True) 
+            # Load model from the constructed path
+            if not os.path.exists(model_load_path):
+                # Fallback to trying checkpoint.pth if final_model.pth doesn't exist (for older runs)
+                print(f"Warning: final_model.pth not found at {model_load_path}. Trying checkpoint.pth...")
+                model_load_path = os.path.join(setting_base_dir, setting, 'checkpoint.pth')
+                if not os.path.exists(model_load_path):
+                    raise FileNotFoundError(f"Neither final_model.pth nor checkpoint.pth found in {os.path.join(setting_base_dir, setting)}. Ensure training completed successfully.")
+            
+            self.model.load_state_dict(torch.load(model_load_path))
 
         # Store predictions (only for Voltage) and true values (only for Voltage)
         voltage_preds = []
@@ -320,7 +427,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print('voltage_preds shape:', voltage_preds.shape)
         print('voltage_trues shape:', voltage_trues.shape)
 
-        # --- Result saving (all into output_path) --- 
+        # --- Result saving (all into output_path, which is now correctly determined) --- 
 
         # Calculate metrics ONLY for Voltage
         mae, mse, rmse, _, _ = metric(voltage_preds, voltage_trues)
