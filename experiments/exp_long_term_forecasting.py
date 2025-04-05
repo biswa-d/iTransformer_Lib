@@ -99,8 +99,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
 
-        # Determine the base output path for this run based on k_folds
-        base_output_dir = './run_cv/' if self.args.k_folds > 0 else './run_outputs/'
+        # Determine the base output path for this run based on k_folds and cv_run_dir
+        if self.args.k_folds > 0 and self.args.cv_run_dir:
+            base_output_dir = self.args.cv_run_dir # Use the specific CV run dir passed from shell
+        elif self.args.k_folds > 0:
+            base_output_dir = './run_cv/' # Fallback if cv_run_dir not provided
+        else:
+            base_output_dir = './run_outputs/' # Standard output dir
+
         output_path = os.path.join(base_output_dir, setting)
         if not os.path.exists(output_path):
             os.makedirs(output_path)
@@ -259,19 +265,24 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Batch size: {self.args.batch_size}")
         print(f"Number of batches: {len(test_loader)}")
         
-        # <<< Determine the correct base directory for loading/saving >>>
-        # The 'setting' identifies the specific run. Check if it was a CV fold.
-        is_cv_run = '_fold' in setting 
-        load_save_base_dir = './run_cv/' if is_cv_run else './run_outputs/'
-        output_path = os.path.join(load_save_base_dir, setting)
+        # Determine the correct base directory for loading/saving
+        # The 'setting' identifies the specific run.
+        setting_base_dir = None
+        if self.args.cv_run_dir: # If CV base dir is provided, use it
+            setting_base_dir = self.args.cv_run_dir
+        else: # Otherwise, infer based on setting name (fallback/standard runs)
+            is_cv_run_inferred = '_fold' in setting 
+            setting_base_dir = './run_cv/' if is_cv_run_inferred else './run_outputs/'
+            
+        output_path = os.path.join(setting_base_dir, setting)
         # Ensure the directory exists (it should from training, but check)
         os.makedirs(output_path, exist_ok=True)
-        print(f"Output files will be saved to: {output_path}")
+        print(f"Output files will be saved/loaded relative to: {output_path}")
 
         if test:
             print('loading model')
-            # <<< Construct path using the CORRECT base directory >>>
-            constructed_path = os.path.join(load_save_base_dir, setting, 'checkpoint.pth')
+            # Construct path using the determined base directory and setting
+            constructed_path = os.path.join(setting_base_dir, setting, 'checkpoint.pth')
             # Force flush the output
             print(f"DEBUG: Attempting to load model from: {constructed_path}", flush=True) 
             # Load model from the constructed path
