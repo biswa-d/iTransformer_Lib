@@ -128,6 +128,11 @@ if __name__ == '__main__':
                         help='Number of epochs in the SWA annealing strategy')
     # <<< End SWA Arguments >>>
 
+    # <<< Add Optimizer Choice Argument >>>
+    parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'adamw'],
+                        help='Optimizer to use (adam or adamw)')
+    # <<< End Optimizer Choice >>>
+
     args = parser.parse_args()
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
 

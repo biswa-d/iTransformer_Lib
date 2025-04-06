@@ -47,9 +47,22 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        model_optim = optim.Adam(self.model.parameters(), 
-                               lr=self.args.learning_rate,
-                               weight_decay=self.args.weight_decay)
+        if self.args.optimizer.lower() == 'adamw':
+            print("Using AdamW optimizer")
+            model_optim = optim.AdamW(self.model.parameters(), 
+                                   lr=self.args.learning_rate,
+                                   weight_decay=self.args.weight_decay) # AdamW handles weight decay correctly
+        elif self.args.optimizer.lower() == 'adam':
+            print("Using Adam optimizer")
+            model_optim = optim.Adam(self.model.parameters(), 
+                                   lr=self.args.learning_rate,
+                                   weight_decay=self.args.weight_decay) # Standard Adam with L2 regularization
+        else:
+            print(f"Warning: Unsupported optimizer '{self.args.optimizer}'. Defaulting to Adam.")
+            model_optim = optim.Adam(self.model.parameters(), 
+                                   lr=self.args.learning_rate,
+                                   weight_decay=self.args.weight_decay)
+                                   
         return model_optim
 
     def _select_criterion(self):
@@ -310,8 +323,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # <<< Save the chosen final model (SWA or best ES model) >>>
         final_model_path = os.path.join(output_path, 'final_model.pth') 
         try:
-            # Note: AveragedModel needs module access for state_dict
-            torch.save(final_model_to_save.module.state_dict() if isinstance(final_model_to_save, AveragedModel) else final_model_to_save.state_dict(), final_model_path)
+            model_to_save_state = final_model_to_save
+            # Handle potential wrappers (AveragedModel, DataParallel)
+            if isinstance(model_to_save_state, AveragedModel):
+                model_to_save_state = model_to_save_state.module # Unwrap AveragedModel
+            if isinstance(model_to_save_state, nn.DataParallel):
+                model_to_save_state = model_to_save_state.module # Unwrap DataParallel
+                
+            torch.save(model_to_save_state.state_dict(), final_model_path)
             print(f"Final model state dict saved to {final_model_path}")
         except Exception as e:
             print(f"Error saving final model state dict: {e}")
