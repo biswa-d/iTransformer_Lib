@@ -276,9 +276,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         final_model_to_save = self.model
         if self.args.use_swa:
             # Potentially update BN stats if needed (LayerNorm might not require it)
-            # print("Updating SWA model BN statistics...")
-            # torch.optim.swa_utils.update_bn(train_loader, swa_model, device=self.device)
-            # print("SWA BN update complete.")
+            # <<< Reinstate BN/Statistics Update >>>
+            print("Updating SWA model statistics (e.g., BN)...")
+            # Need the training data loader for this step
+            torch.optim.swa_utils.update_bn(train_loader, swa_model, device=self.device)
+            print("SWA model statistics update complete.")
+            # <<< End BN Update >>>
             final_model_to_save = swa_model # Use the averaged model
             print("Using SWA averaged model for saving.")
         else:
