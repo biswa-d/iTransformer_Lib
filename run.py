@@ -172,26 +172,52 @@ if __name__ == '__main__':
 
         for ii in range(args.itr):
             # setting record of experiments - using specified args and shell timestamp
-            setting = '{}_{}_{}_sl{}_dm{}_nh{}_df{}_ts{}'.format(
+            # Generate setting string - exclude fold for CV main setting
+            setting_components = [
                 args.model_id,
                 args.model,
                 args.data,
-                args.seq_len,
-                args.d_model,
-                args.n_heads,
-                args.d_ff,
-                args.run_timestamp) # Use timestamp passed from shell
+                f'sl{args.seq_len}',
+                f'dm{args.d_model}',
+                f'nh{args.n_heads}',
+                f'df{args.d_ff}',
+            ]
+            # Add fold info ONLY if NOT doing K-Fold CV OR if it's needed elsewhere (adjust if needed)
+            # For the main run identifier, we EXCLUDE the fold.
+            # The 'setting' passed to Exp class will be this main setting.
+            # The fold number is available via args.fold within Exp.
+            if args.k_folds <= 0: # Add fold info if not CV (or adjust if needed)
+                 setting_components.append(f'fold{args.fold}') # Keep fold if not CV? Decide based on usage. Assuming fold=0 if not CV.
+            
+            setting_components.append(f'ts{args.run_timestamp}')
+            setting = '_'.join(setting_components)
 
-            # Save the exact setting name to the unique file specified by the shell script
-            logs_dir = os.path.dirname(args.setting_file_path)
-            os.makedirs(logs_dir, exist_ok=True) # Ensure Logs directory exists
-            try:
-                with open(args.setting_file_path, 'w') as f:
-                    f.write(setting)
-                print(f"Saved setting '{setting}' to {args.setting_file_path}")
-            except IOError as e:
-                print(f"Error: Could not write setting file {args.setting_file_path}: {e}")
-                exit(1) # Exit if we can't save the setting
+            # Save the run identifier (setting)
+            if args.k_folds > 0:
+                # For CV runs, save main_setting.txt inside cv_run_dir
+                if not args.cv_run_dir:
+                    print("Error: --cv_run_dir is required when --k_folds > 0")
+                    exit(1)
+                os.makedirs(args.cv_run_dir, exist_ok=True)
+                setting_save_path = os.path.join(args.cv_run_dir, 'main_setting.txt')
+                try:
+                    with open(setting_save_path, 'w') as f:
+                        f.write(setting)
+                    print(f"Saved main CV run setting '{setting}' to {setting_save_path}")
+                except IOError as e:
+                    print(f"Error: Could not write main setting file {setting_save_path}: {e}")
+                    exit(1)
+            else:
+                # For non-CV runs, use the original setting_file_path logic (likely in Logs/)
+                logs_dir = os.path.dirname(args.setting_file_path)
+                os.makedirs(logs_dir, exist_ok=True) # Ensure Logs directory exists
+                try:
+                    with open(args.setting_file_path, 'w') as f:
+                        f.write(setting)
+                    print(f"Saved setting '{setting}' to {args.setting_file_path}")
+                except IOError as e:
+                    print(f"Error: Could not write setting file {args.setting_file_path}: {e}")
+                    exit(1) # Exit if we can't save the setting
 
             exp = Exp(args)  # set experiments
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
@@ -206,21 +232,42 @@ if __name__ == '__main__':
 
             torch.cuda.empty_cache()
     else:
-        # Determine the setting to test by reading the unique setting file
+        # Determine the setting to test
         setting = None
-        try:
-            with open(args.setting_file_path, 'r') as f:
-                setting = f.read().strip()
-            if not setting:
-                print(f"Error: Setting file {args.setting_file_path} is empty.")
+        if args.k_folds > 0:
+            # For CV runs, read from main_setting.txt inside cv_run_dir
+            if not args.cv_run_dir:
+                print("Error: --cv_run_dir is required for testing when --k_folds > 0")
                 exit(1)
-            print(f"Read setting '{setting}' from {args.setting_file_path}")
-        except FileNotFoundError:
-            print(f"Error: Setting file not found at {args.setting_file_path}. Cannot determine which checkpoint to test.")
-            exit(1)
-        except IOError as e:
-             print(f"Error reading setting file {args.setting_file_path}: {e}")
-             exit(1)
+            setting_read_path = os.path.join(args.cv_run_dir, 'main_setting.txt')
+            try:
+                with open(setting_read_path, 'r') as f:
+                    setting = f.read().strip()
+                if not setting:
+                    print(f"Error: Main setting file {setting_read_path} is empty.")
+                    exit(1)
+                print(f"Read main CV run setting '{setting}' from {setting_read_path}")
+            except FileNotFoundError:
+                print(f"Error: Main setting file not found at {setting_read_path}. Cannot determine which run to test.")
+                exit(1)
+            except IOError as e:
+                 print(f"Error reading main setting file {setting_read_path}: {e}")
+                 exit(1)
+        else:
+            # For non-CV runs, use the original setting_file_path logic
+            try:
+                with open(args.setting_file_path, 'r') as f:
+                    setting = f.read().strip()
+                if not setting:
+                    print(f"Error: Setting file {args.setting_file_path} is empty.")
+                    exit(1)
+                print(f"Read setting '{setting}' from {args.setting_file_path}")
+            except FileNotFoundError:
+                print(f"Error: Setting file not found at {args.setting_file_path}. Cannot determine which checkpoint to test.")
+                exit(1)
+            except IOError as e:
+                 print(f"Error reading setting file {args.setting_file_path}: {e}")
+                 exit(1)
 
         exp = Exp(args)  # set experiments
         # Decide whether to run test or simulation

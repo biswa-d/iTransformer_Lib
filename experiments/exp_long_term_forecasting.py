@@ -119,18 +119,23 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
 
-        # Determine the base output path for this run based on k_folds and cv_run_dir
-        if self.args.k_folds > 0 and self.args.cv_run_dir:
-            base_output_dir = self.args.cv_run_dir # Use the specific CV run dir passed from shell
-        elif self.args.k_folds > 0:
-            base_output_dir = './run_cv/' # Fallback if cv_run_dir not provided
+        # Determine the output path for this specific fold/run
+        if self.args.k_folds > 0:
+            # For CV, use cv_run_dir and create a fold-specific subfolder
+            if not self.args.cv_run_dir:
+                raise ValueError("--cv_run_dir is required when --k_folds > 0")
+            # The 'setting' variable here is the main run identifier from run.py
+            # We create the fold path within the main run directory
+            output_path = os.path.join(self.args.cv_run_dir, f'fold_{self.args.fold}')
         else:
-            base_output_dir = './run_outputs/' # Standard output dir
+            # For non-CV runs, use run_outputs and the standard setting string
+            base_output_dir = './run_outputs/'
+            output_path = os.path.join(base_output_dir, setting)
 
-        output_path = os.path.join(base_output_dir, setting)
+        # Create the specific output directory for this fold/run
         if not os.path.exists(output_path):
             os.makedirs(output_path)
-        print(f"Outputs for this run will be saved in: {output_path}")
+        print(f"Outputs for this fold/run (Fold {self.args.fold if self.args.k_folds > 0 else 'N/A'}) will be saved in: {output_path}")
 
         # Save the arguments used for this run
         args_path = os.path.join(output_path, 'args.json')
@@ -384,34 +389,44 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Batch size: {self.args.batch_size}")
         print(f"Number of batches: {len(test_loader)}")
         
-        # Determine the correct base directory for loading/saving
-        # The 'setting' identifies the specific run.
-        setting_base_dir = None
-        if self.args.cv_run_dir: # If CV base dir is provided, use it
-            setting_base_dir = self.args.cv_run_dir
-        else: # Otherwise, infer based on setting name (fallback/standard runs)
-            is_cv_run_inferred = '_fold' in setting 
-            setting_base_dir = './run_cv/' if is_cv_run_inferred else './run_outputs/'
-            
-        output_path = os.path.join(setting_base_dir, setting)
-        # Ensure the directory exists (it should from training, but check)
-        os.makedirs(output_path, exist_ok=True)
-        print(f"Output files will be saved/loaded relative to: {output_path}")
+        # Determine the output path for this specific fold/run for loading/saving
+        if self.args.k_folds > 0:
+            # For CV, use cv_run_dir and the specific fold subfolder
+            if not self.args.cv_run_dir:
+                raise ValueError("--cv_run_dir is required for testing when --k_folds > 0")
+            # The 'setting' variable is the main run identifier read from main_setting.txt
+            # Construct the path to the specific fold directory
+            output_path = os.path.join(self.args.cv_run_dir, f'fold_{self.args.fold}')
+        else:
+            # For non-CV runs, use run_outputs and the standard setting string
+            base_output_dir = './run_outputs/'
+            output_path = os.path.join(base_output_dir, setting)
+
+        # Check if the specific output directory exists (it should from training)
+        if not os.path.exists(output_path):
+             print(f"Warning: Output directory {output_path} not found. Creating it.")
+             # Or raise an error if testing requires the directory to exist from training
+             # raise FileNotFoundError(f"Output directory {output_path} not found. Ensure training for this fold completed.")
+             os.makedirs(output_path) # Create if needed, or adjust behavior
+
+        print(f"Model loading and result saving path for this fold/run (Fold {self.args.fold if self.args.k_folds > 0 else 'N/A'}): {output_path}")
 
         if test:
             print('loading model')
-            # Construct path using the determined base directory and setting
+            # Construct path to the model file within the correct output_path
             # <<< Load the final_model.pth instead of checkpoint.pth >>>
-            model_load_path = os.path.join(setting_base_dir, setting, 'final_model.pth') 
+            model_load_path = os.path.join(output_path, 'final_model.pth')
             # Force flush the output
-            print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True) 
+            print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True)
             # Load model from the constructed path
             if not os.path.exists(model_load_path):
                 # Fallback to trying checkpoint.pth if final_model.pth doesn't exist (for older runs)
                 print(f"Warning: final_model.pth not found at {model_load_path}. Trying checkpoint.pth...")
-                model_load_path = os.path.join(setting_base_dir, setting, 'checkpoint.pth')
-                if not os.path.exists(model_load_path):
-                    raise FileNotFoundError(f"Neither final_model.pth nor checkpoint.pth found in {os.path.join(setting_base_dir, setting)}. Ensure training completed successfully.")
+                model_load_path_fallback = os.path.join(output_path, 'checkpoint.pth')
+                if not os.path.exists(model_load_path_fallback):
+                    raise FileNotFoundError(f"Neither final_model.pth nor checkpoint.pth found in {output_path}. Ensure training completed successfully.")
+                else:
+                    model_load_path = model_load_path_fallback # Use fallback path
             
             # <<< Load state dict, handling DataParallel >>>
             loaded_state_dict = torch.load(model_load_path)
@@ -520,12 +535,26 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def simulate(self, setting):
         print(f"Starting simulation for setting: {setting}")
 
-        # 1. Load Model Checkpoint
-        model_path = os.path.join(self.args.checkpoints, setting, 'checkpoint.pth')
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Checkpoint not found at {model_path}")
-        print(f"Loading model from: {model_path}")
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        # 1. Load Model Checkpoint from the correct output_path
+        model_load_path = os.path.join(output_path, 'final_model.pth')
+        print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True)
+        if not os.path.exists(model_load_path):
+            print(f"Warning: final_model.pth not found at {model_load_path}. Trying checkpoint.pth...")
+            model_load_path_fallback = os.path.join(output_path, 'checkpoint.pth')
+            if not os.path.exists(model_load_path_fallback):
+                raise FileNotFoundError(f"Neither final_model.pth nor checkpoint.pth found in {output_path}. Ensure training completed successfully.")
+            else:
+                model_load_path = model_load_path_fallback # Use fallback path
+
+        print(f"Loading model from: {model_load_path}")
+        # Load state dict, handling DataParallel
+        loaded_state_dict = torch.load(model_load_path, map_location=self.device)
+        if isinstance(self.model, nn.DataParallel):
+            print("Loading state dict into self.model.module (DataParallel detected)")
+            self.model.module.load_state_dict(loaded_state_dict)
+        else:
+            print("Loading state dict directly into self.model")
+            self.model.load_state_dict(loaded_state_dict)
         self.model.eval() # Set model to evaluation mode
 
         # 2. Get Test Data Object and Scaler
