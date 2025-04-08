@@ -119,25 +119,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
 
-        # Determine the output path for this specific fold/run
-        if self.args.k_folds > 0:
-            # For CV, use cv_run_dir and create a fold-specific subfolder
-            if not self.args.cv_run_dir:
-                raise ValueError("--cv_run_dir is required when --k_folds > 0")
-            # The 'setting' variable here is the main run identifier from run.py
-            # We create the fold path within the main run directory
-            output_path = os.path.join(self.args.cv_run_dir, f'fold_{self.args.fold}')
-        else:
-            # For non-CV runs, use run_outputs and the standard setting string
-            base_output_dir = './run_outputs/'
-            output_path = os.path.join(base_output_dir, setting)
+        # The exact output path is provided by the shell script via args.output_path
+        output_path = self.args.output_path
+        # Ensure the directory exists (should be created by the script)
+        os.makedirs(output_path, exist_ok=True)
+        print(f"Using output path provided by shell script: {output_path}")
 
-        # Create the specific output directory for this fold/run
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        print(f"Outputs for this fold/run (Fold {self.args.fold if self.args.k_folds > 0 else 'N/A'}) will be saved in: {output_path}")
-
-        # Save the arguments used for this run
+        # Save the arguments used for this specific run/fold into its output path
         args_path = os.path.join(output_path, 'args.json')
         with open(args_path, 'w') as f:
             json.dump(vars(self.args), f, indent=4)
@@ -147,6 +135,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         train_steps = len(train_loader)
         # Pass the correct output path to EarlyStopping
+        # EarlyStopping saves checkpoints directly to the provided output_path
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True, path=output_path)
 
         model_optim = self._select_optimizer()
@@ -330,6 +319,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         # --- Save Best Validation Loss (from EarlyStopping) --- 
         best_val_loss = early_stopping.val_loss_min
+        # Save best validation loss directly to the provided output_path
         val_loss_file_path = os.path.join(output_path, 'best_vali_loss.txt')
         try:
             with open(val_loss_file_path, 'w') as f:
@@ -340,7 +330,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # --- End Save --- 
 
         # <<< Save the chosen final model (Always the best ES model now) >>>
-        final_model_path = os.path.join(output_path, 'final_model.pth') 
+        # Save final model directly to the provided output_path
+        final_model_path = os.path.join(output_path, 'final_model.pth')
         try:
             # Unwrap DataParallel if necessary before saving
             model_to_save_state = self.model # Start with the potentially loaded best model
@@ -389,38 +380,18 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Batch size: {self.args.batch_size}")
         print(f"Number of batches: {len(test_loader)}")
         
-        # Determine the output path for this specific fold/run for loading/saving
-        if self.args.k_folds > 0:
-            # For CV, use cv_run_dir and the specific fold subfolder
-            if not self.args.cv_run_dir:
-                raise ValueError("--cv_run_dir is required for testing when --k_folds > 0")
-            # The 'setting' variable is the main run identifier read from main_setting.txt
-            # Construct the path to the specific fold directory
-            output_path = os.path.join(self.args.cv_run_dir, f'fold_{self.args.fold}')
-        else:
-            # For non-CV runs, use run_outputs and the standard setting string
-            base_output_dir = './run_outputs/'
-            output_path = os.path.join(base_output_dir, setting)
-
-        # Check if the specific output directory exists (it should from training)
+        # The exact output path for this run/fold is provided by args.output_path
+        output_path = self.args.output_path
         if not os.path.exists(output_path):
-             print(f"Warning: Output directory {output_path} not found. Creating it.")
-             # Or raise an error if testing requires the directory to exist from training
-             # raise FileNotFoundError(f"Output directory {output_path} not found. Ensure training for this fold completed.")
-             os.makedirs(output_path) # Create if needed, or adjust behavior
-
-        print(f"Model loading and result saving path for this fold/run (Fold {self.args.fold if self.args.k_folds > 0 else 'N/A'}): {output_path}")
+             raise FileNotFoundError(f"Output directory {output_path} not found. Ensure training completed successfully and the correct path was provided.")
+        print(f"Model loading and result saving path: {output_path}")
 
         if test:
             print('loading model')
-            # Construct path to the model file within the correct output_path
-            # <<< Load the final_model.pth instead of checkpoint.pth >>>
+            # Construct path to the model file within the provided output_path
             model_load_path = os.path.join(output_path, 'final_model.pth')
-            # Force flush the output
             print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True)
-            # Load model from the constructed path
             if not os.path.exists(model_load_path):
-                # Fallback to trying checkpoint.pth if final_model.pth doesn't exist (for older runs)
                 print(f"Warning: final_model.pth not found at {model_load_path}. Trying checkpoint.pth...")
                 model_load_path_fallback = os.path.join(output_path, 'checkpoint.pth')
                 if not os.path.exists(model_load_path_fallback):
@@ -507,6 +478,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Number of model parameters: {num_params}")
 
         # Save metrics to a file within the run's output directory
+        # Save metrics directly to the provided output_path
         metrics_file_path = os.path.join(output_path, 'metrics_summary.txt')
         print(f"--- Saving Metrics to {metrics_file_path} --- ")
         with open(metrics_file_path, 'w') as f:
@@ -520,6 +492,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print("--- Saving Results CSV --- ")
         # Use timestamp only for the filename within the setting directory
         timestamp = setting.split('_ts')[-1] if '_ts' in setting else 'test'
+        # Save results CSV directly to the provided output_path
         csv_file_path = os.path.join(output_path, f'results_voltage_ts{timestamp}.csv')
         
         results_dict = {
@@ -535,7 +508,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def simulate(self, setting):
         print(f"Starting simulation for setting: {setting}")
 
-        # 1. Load Model Checkpoint from the correct output_path
+        # 1. Load Model Checkpoint from the provided output_path
         model_load_path = os.path.join(output_path, 'final_model.pth')
         print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True)
         if not os.path.exists(model_load_path):

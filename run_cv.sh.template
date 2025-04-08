@@ -57,18 +57,20 @@ LR_DECAY_PERIOD=20 # Dummy
 # <<< Generate a timestamp for the entire CV run >>>
 CV_RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
 
-# <<< Create the main output directory for this CV run >>>
-CV_RUN_DIR="./run_cv/run_${CV_RUN_TIMESTAMP}_${BASE_MODEL_ID}"
-mkdir -p "$CV_RUN_DIR"
-mkdir -p Logs # Ensure Logs dir exists for setting files
+# <<< Define and create the main job directory for this CV run >>>
+MAIN_JOB_DIR="./run_cv/${BASE_MODEL_ID}_ts${CV_RUN_TIMESTAMP}"
+mkdir -p "$MAIN_JOB_DIR"
+echo "Main CV Job Directory: $MAIN_JOB_DIR"
+# Remove Logs directory creation if setting files are no longer saved there
+# mkdir -p Logs
 
 echo "Starting K-Fold Cross-Validation with K=$K_FOLDS"
-echo "Main Output Directory: $CV_RUN_DIR"
+# echo "Main Output Directory: $CV_RUN_DIR" # Replaced by MAIN_JOB_DIR
 echo "Base Model ID: $BASE_MODEL_ID"
 echo "Epochs per Fold: $TRAIN_EPOCHS_PER_FOLD"
 echo "Test Data: $TEST_DATA"
 
-FOLD_DIRS=() # Array to store fold output directories relative to CV_RUN_DIR
+FOLD_PATHS=() # Array to store full fold output paths
 
 for (( k=0; k<$K_FOLDS; k++ ))
 do
@@ -76,17 +78,12 @@ do
     echo "===== Starting Fold $k / $K_FOLDS ====="
     CURRENT_FOLD_ID="${BASE_MODEL_ID}_fold${k}"
     # Timestamp for this specific fold's execution (can be useful for logs)
-    FOLD_RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+    # FOLD_RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S') # No longer needed for path/setting
 
-    # Setting name incorporates fold ID and fold timestamp
-    SETTING_NAME="${CURRENT_FOLD_ID}_${MODEL}_${DATA}_sl${SEQ_LEN}_dm${D_MODEL}_nh${N_HEADS}_df${D_FF}_ts${FOLD_RUN_TIMESTAMP}"
-
-    # Log file path (remains in the central Logs directory)
-    SETTING_FILE_PATH="Logs/setting_${SETTING_NAME}.txt"
-
-    # <<< Output directory for this specific fold run (inside the main CV_RUN_DIR) >>>
-    FOLD_OUTPUT_DIR="${CV_RUN_DIR}/${SETTING_NAME}"
-    FOLD_DIRS+=("$SETTING_NAME") # Store relative name for summary later
+    # <<< Define and create the output directory for this specific fold >>>
+    FOLD_OUTPUT_PATH="${MAIN_JOB_DIR}/fold_${k}"
+    mkdir -p "$FOLD_OUTPUT_PATH"
+    FOLD_PATHS+=("$FOLD_OUTPUT_PATH") # Store full path for summary later
 
     # --- Training Phase ---
     echo "--- Training Fold $k ---"
@@ -96,8 +93,9 @@ do
         --k_folds $K_FOLDS
         --fold $k
         --model_id "$CURRENT_FOLD_ID" # Use fold-specific ID
-        --run_timestamp "$FOLD_RUN_TIMESTAMP" # Pass fold-specific timestamp
-        --setting_file_path "$SETTING_FILE_PATH" # Path to log file
+        # --run_timestamp "$FOLD_RUN_TIMESTAMP" # Removed
+        # --setting_file_path "$SETTING_FILE_PATH" # Removed
+        --output_path "$FOLD_OUTPUT_PATH" # Pass the exact output path for this fold
         --model "$MODEL"
         --data "$DATA"
         --root_path "$ROOT_PATH"
@@ -141,23 +139,19 @@ do
     )
     if [ "$USE_AMP" = True ]; then TRAIN_ARGS+=(--use_amp); fi
 
-    echo "Running training command (Output Dir: $FOLD_OUTPUT_DIR)..."
-    # NOTE: The python script determines the final output path based on the setting name
+    echo "Running training command (Output Path: $FOLD_OUTPUT_PATH)..."
     python run.py "${TRAIN_ARGS[@]}"
 
     if [ $? -ne 0 ]; then
         echo "Error: Training Fold $k failed. Exiting." >&2
         exit 1
     fi
-    # Verify the directory was created where expected by the python script
-    # The python script uses os.path.join(base_output_dir, setting)
-    # base_output_dir is ./run_cv/ because args.k_folds > 0
-    # setting is SETTING_NAME
-    ACTUAL_FOLD_OUTPUT_DIR="./run_cv/${SETTING_NAME}" # Path constructed by python script
-    if [ -d "$ACTUAL_FOLD_OUTPUT_DIR" ]; then
-        echo "Training Fold $k finished. Checkpoint saved in $ACTUAL_FOLD_OUTPUT_DIR"
+    # Verify the directory exists (it should)
+    if [ -d "$FOLD_OUTPUT_PATH" ]; then
+        echo "Training Fold $k finished. Checkpoint saved in $FOLD_OUTPUT_PATH"
     else
-        echo "Error: Expected output directory $ACTUAL_FOLD_OUTPUT_DIR not found after training Fold $k." >&2
+        # This shouldn't happen if python script ran successfully, but good to check
+        echo "Error: Output directory $FOLD_OUTPUT_PATH not found after training Fold $k." >&2
         exit 1
     fi
 
@@ -167,9 +161,11 @@ do
     # Construct testing args (use the same setting file path to load the correct setting)
     TEST_ARGS=(
         --is_training 0
-        --setting_file_path "$SETTING_FILE_PATH" # Use the setting file saved by training
-        --k_folds 0 # Testing doesn't use k-fold data splitting
-        --fold 0    # Irrelevant for testing
+        # --setting_file_path "$SETTING_FILE_PATH" # Removed
+        # --k_folds 0 # Keep k_folds > 0 info if needed by run.py logic, but fold splitting is off
+        # --fold 0    # Keep fold number consistent with training? Or set to 0? Let's keep it $k
+        --fold $k
+        --output_path "$FOLD_OUTPUT_PATH" # Pass the exact path to load model and save results
         --model_id "$CURRENT_FOLD_ID" # Keep model ID consistent
         --model "$MODEL"
         --data "$DATA"
@@ -205,15 +201,14 @@ do
     )
      if [ "$USE_AMP" = True ]; then TEST_ARGS+=(--use_amp); fi
 
-    echo "Running testing command (Output Dir: $ACTUAL_FOLD_OUTPUT_DIR)..."
-    # The python script will reuse the same output dir based on the setting name read from SETTING_FILE_PATH
+    echo "Running testing command (Output Path: $FOLD_OUTPUT_PATH)..."
     python run.py "${TEST_ARGS[@]}"
 
     if [ $? -ne 0 ]; then
         echo "Warning: Testing Fold $k failed." >&2
         # Continue to next fold, but log the failure
     else
-       echo "Testing Fold $k finished. Results saved in $ACTUAL_FOLD_OUTPUT_DIR"
+       echo "Testing Fold $k finished. Results saved in $FOLD_OUTPUT_PATH"
     fi
 
 done
@@ -222,40 +217,38 @@ done
 echo ""
 echo "===== Generating Cross-Validation Summary ====="
 # <<< Save summary inside the main CV run directory >>>
-SUMMARY_FILE="${CV_RUN_DIR}/cv_summary.txt"
+SUMMARY_FILE="${MAIN_JOB_DIR}/cv_summary.txt"
 echo "Saving summary to: $SUMMARY_FILE"
 echo "# K-Fold Cross-Validation Summary" > "$SUMMARY_FILE"
-echo "# Run Directory: $CV_RUN_DIR" >> "$SUMMARY_FILE"
+echo "# Main Job Directory: $MAIN_JOB_DIR" >> "$SUMMARY_FILE"
 echo "# Base Model ID: $BASE_MODEL_ID" >> "$SUMMARY_FILE"
 echo "# K = $K_FOLDS" >> "$SUMMARY_FILE"
 echo "# Timestamp: $(date)" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
-echo "Fold | Best Validation Loss | Fold Output Directory Name" >> "$SUMMARY_FILE"
-echo "-----|----------------------|---------------------------" >> "$SUMMARY_FILE"
+echo "Fold | Best Validation Loss | Fold Output Path" >> "$SUMMARY_FILE"
+echo "-----|----------------------|-----------------" >> "$SUMMARY_FILE"
 
 BEST_FOLD_LOSS=inf
-BEST_FOLD_DIR_NAME=""
+BEST_FOLD_PATH=""
 BEST_FOLD_IDX=-1
 
-# Loop through the recorded fold directory *names*
-for i in "${!FOLD_DIRS[@]}"; do
-    fold_dir_name="${FOLD_DIRS[$i]}"
-    # Construct full path to the fold directory created by python script
-    actual_fold_dir_path="./run_cv/${fold_dir_name}"
-    loss_file="${actual_fold_dir_path}/best_vali_loss.txt"
+# Loop through the recorded fold *paths*
+for i in "${!FOLD_PATHS[@]}"; do
+    fold_path="${FOLD_PATHS[$i]}"
+    loss_file="${fold_path}/best_vali_loss.txt"
 
     if [ -f "$loss_file" ]; then
         loss=$(cat "$loss_file")
-        echo "  $i  | $loss             | $fold_dir_name" >> "$SUMMARY_FILE"
+        echo "  $i  | $loss             | $fold_path" >> "$SUMMARY_FILE"
         # Check if this is the best loss so far
          if (( $(echo "$loss < $BEST_FOLD_LOSS" | bc -l) )); then
               BEST_FOLD_LOSS=$loss
-              BEST_FOLD_DIR_NAME=$fold_dir_name
+              BEST_FOLD_PATH=$fold_path
               BEST_FOLD_IDX=$i
          fi
     else
-        echo "  $i  | --- Not Found ---    | $fold_dir_name" >> "$SUMMARY_FILE"
-        echo "Warning: best_vali_loss.txt not found for fold $i in $actual_fold_dir_path"
+        echo "  $i  | --- Not Found ---    | $fold_path" >> "$SUMMARY_FILE"
+        echo "Warning: best_vali_loss.txt not found for fold $i in $fold_path"
     fi
 done
 
@@ -263,15 +256,15 @@ echo "" >> "$SUMMARY_FILE"
 if [ $BEST_FOLD_IDX -ne -1 ]; then
     echo "Best Fold based on Validation Loss: Fold $BEST_FOLD_IDX" >> "$SUMMARY_FILE"
     echo "Best Validation Loss: $BEST_FOLD_LOSS" >> "$SUMMARY_FILE"
-    echo "Best Fold Directory Name: $BEST_FOLD_DIR_NAME" >> "$SUMMARY_FILE"
-    echo "-> Check testing results (metrics_summary.txt, results_*.csv) in ./run_cv/$BEST_FOLD_DIR_NAME" >> "$SUMMARY_FILE"
+    echo "Best Fold Path: $BEST_FOLD_PATH" >> "$SUMMARY_FILE"
+    echo "-> Check testing results (metrics_summary.txt, results_*.csv) in $BEST_FOLD_PATH" >> "$SUMMARY_FILE"
 else
      echo "Could not determine the best fold (no validation loss files found?)." >> "$SUMMARY_FILE"
 fi
 
 echo ""
 echo "===== K-Fold Run Finished ====="
-echo "Main Output Directory: $CV_RUN_DIR"
+echo "Main Job Directory: $MAIN_JOB_DIR"
 echo "Summary saved to $SUMMARY_FILE"
 echo "Best validation fold: $BEST_FOLD_IDX (Loss: $BEST_FOLD_LOSS)"
-echo "Check detailed results and test metrics in the respective fold directories within $CV_RUN_DIR"
+echo "Check detailed results and test metrics in the respective fold directories within $MAIN_JOB_DIR"

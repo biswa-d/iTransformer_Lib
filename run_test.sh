@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # --- Argument Parsing ---
-SETTING_FILE_PATH="Logs/setting_20250403_172133.txt"
+# SETTING_FILE_PATH="Logs/setting_20250403_172133.txt" # Replaced by --output_path argument
+OUTPUT_PATH="" # Will be set by argument
+K_FOLDS=0    # Default for non-CV runs
+FOLD=0       # Default for non-CV runs
 
 # --- Configuration (Define defaults or allow overrides via arguments) ---
 # Defaults set to match the specific training run: setting_20250329_094517
@@ -43,11 +46,20 @@ OTHER_ARGS+=(--use_norm 0)
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
-        --setting_file_path)
-        SETTING_FILE_PATH="$2"
-        shift # past argument
-        shift # past value
-        ;;
+        # --setting_file_path) # Removed
+        # SETTING_FILE_PATH="$2"
+        # shift # past argument
+        # shift # past value
+        # ;;
+        --output_path)
+        OUTPUT_PATH="$2"
+        shift; shift ;;
+        --k_folds)
+        K_FOLDS="$2"
+        shift; shift ;;
+        --fold)
+        FOLD="$2"
+        shift; shift ;;
         --model_id)
         MODEL_ID="$2"
         shift; shift ;;
@@ -112,18 +124,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Validation ---
-if [ -z "$SETTING_FILE_PATH" ]; then
-    echo "Error: --setting_file_path argument is required." >&2
-    echo "Usage: ./run_test.sh --setting_file_path <path_to_setting_file> [other_options...]" >&2
+if [ -z "$OUTPUT_PATH" ]; then
+    echo "Error: --output_path argument is required." >&2
+    echo "Usage: ./run_test.sh --output_path <path_to_job_or_fold_dir> [other_options...]" >&2
     exit 1
 fi
 
-if [ ! -f "$SETTING_FILE_PATH" ]; then
-    echo "Error: Setting file not found at $SETTING_FILE_PATH" >&2
+if [ ! -d "$OUTPUT_PATH" ]; then
+    echo "Error: Output directory not found at $OUTPUT_PATH" >&2
     exit 1
 fi
 
-echo "Using setting file: $SETTING_FILE_PATH"
+echo "Using output directory: $OUTPUT_PATH"
 echo "Testing with Data Path: $TEST_DATA"
 
 # --- SHM setup (Optional, uncomment if needed) ---
@@ -133,9 +145,11 @@ echo "Testing with Data Path: $TEST_DATA"
 # find "$SHM_DIR" -maxdepth 1 -type f -name "nccl-*" -exec rm -f {} \;
 
 # --- Execute Testing ---
-echo "Starting testing on GPUs $DEVICES using setting from $SETTING_FILE_PATH..."
+echo "Starting testing on GPUs $DEVICES using model from $OUTPUT_PATH..."
 python run.py --is_training 0 \
-               --setting_file_path "$SETTING_FILE_PATH" \
+               --output_path "$OUTPUT_PATH" \
+               --k_folds "$K_FOLDS" \
+               --fold "$FOLD" \
                --model_id "$MODEL_ID" \
                --model "$MODEL" \
                --data "$DATA" \

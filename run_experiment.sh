@@ -1,11 +1,20 @@
 #!/bin/bash
 
-# Create Logs directory if it doesn't exist
-mkdir -p Logs
-
-# Create timestamp and unique setting file path
+# Generate timestamp
 RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
-SETTING_FILE_PATH="Logs/setting_${RUN_TIMESTAMP}.txt" # Unique setting file per run
+
+# Define Model ID (used for directory name)
+MODEL_ID="custom_small" # Or get from args if needed
+
+# Define and create the output directory for this run
+JOB_DIR_NAME="${MODEL_ID}_ts${RUN_TIMESTAMP}"
+OUTPUT_PATH="./run_outputs/${JOB_DIR_NAME}"
+mkdir -p "$OUTPUT_PATH"
+echo "Output directory for this run: $OUTPUT_PATH"
+
+# Remove old Logs/setting file logic
+# mkdir -p Logs
+# SETTING_FILE_PATH="Logs/setting_${RUN_TIMESTAMP}.txt"
 
 # SHM setup (Optional, keep if needed)
 SHM_DIR=/tmp/shm_dehuryb
@@ -14,7 +23,7 @@ find "$SHM_DIR" -maxdepth 1 -type f -name "torch_*" -exec rm -f {} \;
 find "$SHM_DIR" -maxdepth 1 -type f -name "nccl-*" -exec rm -f {} \;
 
 # Set hyperparameters for training
-MODEL_ID="custom_small"
+# MODEL_ID is defined above now
 MODEL="iTransformer" #test
 DATA="custom"
 ROOT_PATH="./data/"
@@ -45,7 +54,8 @@ DROPOUT=0.35
 # Log start time and parameters
 echo "===== Training Started at $(date) ====="
 echo "Timestamp: $RUN_TIMESTAMP"
-echo "Setting File: $SETTING_FILE_PATH"
+# echo "Setting File: $SETTING_FILE_PATH" # Removed
+echo "Output Path: $OUTPUT_PATH"
 echo "Model: $MODEL"
 echo "Devices: $DEVICES"
 echo "Epochs: $TRAIN_EPOCHS"
@@ -55,8 +65,11 @@ echo "Learning Rate: $LEARNING_RATE"
 # Train the model
 echo "Starting training on GPUs $DEVICES..."
 python run.py --is_training 1 \
-               --run_timestamp "$RUN_TIMESTAMP" \
-               --setting_file_path "$SETTING_FILE_PATH" \
+               # --run_timestamp "$RUN_TIMESTAMP" \ # Removed
+               # --setting_file_path "$SETTING_FILE_PATH" \ # Removed
+               --output_path "$OUTPUT_PATH" \
+               --k_folds 0 \ # Explicitly set for non-CV run
+               --fold 0 \    # Explicitly set for non-CV run
                --model_id "$MODEL_ID" \
                --model "$MODEL" \
                --data "$DATA" \
@@ -87,10 +100,13 @@ python run.py --is_training 1 \
 
 echo "Training finished."
 
-# Test the model
-echo "Starting testing on GPUs $DEVICES using setting from $SETTING_FILE_PATH..."
+# Test the model using the output path
+echo "Starting testing on GPUs $DEVICES using model from $OUTPUT_PATH..."
 python run.py --is_training 0 \
-               --setting_file_path "$SETTING_FILE_PATH" \
+                # --setting_file_path "$SETTING_FILE_PATH" \ # Removed
+                --output_path "$OUTPUT_PATH" \
+                --k_folds 0 \ # Explicitly set for non-CV run
+                --fold 0 \    # Explicitly set for non-CV run
                --model_id "$MODEL_ID" \
                --model "$MODEL" \
                --data "$DATA" \
