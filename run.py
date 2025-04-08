@@ -165,55 +165,56 @@ if __name__ == '__main__':
     else: # MTSF: multivariate time series forecasting
         Exp = Exp_Long_Term_Forecast
 
+if args.is_training:
+    # Timestamp is handled by the shell script for directory naming.
+    # The check for args.run_timestamp is no longer needed here.
+    # if not args.run_timestamp:
+    #     raise ValueError("--run_timestamp is required when --is_training=1")
+    # Removed stray raise ValueError
 
-    if args.is_training:
-        # Ensure timestamp is provided for training
-        if not args.run_timestamp:
-            raise ValueError("--run_timestamp is required when --is_training=1")
+    for ii in range(args.itr):
+        # setting record of experiments - using specified args and shell timestamp
+        # Original setting string generation (used internally by Exp class)
+        # The shell script's timestamp is used if provided
+        setting_components = [
+            args.model_id,
+            args.model,
+            args.data,
+            f'sl{args.seq_len}',
+            f'dm{args.d_model}',
+            f'nh{args.n_heads}',
+            f'df{args.d_ff}',
+            f'fold{args.fold}' # Include fold info in setting string
+        ]
+        if args.run_timestamp:
+             setting_components.append(f'ts{args.run_timestamp}')
+        else:
+             # Fallback if timestamp not provided (should not happen with script)
+             setting_components.append(f'ts{time.strftime("%Y%m%d_%H%M%S")}')
+        setting = '_'.join(setting_components)
 
-        for ii in range(args.itr):
-            # setting record of experiments - using specified args and shell timestamp
-            # Original setting string generation (used internally by Exp class)
-            # The shell script's timestamp is used if provided
-            setting_components = [
-                args.model_id,
-                args.model,
-                args.data,
-                f'sl{args.seq_len}',
-                f'dm{args.d_model}',
-                f'nh{args.n_heads}',
-                f'df{args.d_ff}',
-                f'fold{args.fold}' # Include fold info in setting string
-            ]
-            if args.run_timestamp:
-                 setting_components.append(f'ts{args.run_timestamp}')
-            else:
-                 # Fallback if timestamp not provided (should not happen with script)
-                 setting_components.append(f'ts{time.strftime("%Y%m%d_%H%M%S")}')
-            setting = '_'.join(setting_components)
+        # Directory creation is now handled by the shell script.
+        # output_path argument provides the final destination.
+        print(f"Using output path provided by shell script: {args.output_path}")
+        # Ensure the path passed from the script exists
+        os.makedirs(args.output_path, exist_ok=True)
 
-            # Directory creation is now handled by the shell script.
-            # output_path argument provides the final destination.
-            print(f"Using output path provided by shell script: {args.output_path}")
-            # Ensure the path passed from the script exists
-            os.makedirs(args.output_path, exist_ok=True)
+        # No longer need to save/read setting identifier file here.
+        # The output_path argument directly tells where to save/load.
 
-            # No longer need to save/read setting identifier file here.
-            # The output_path argument directly tells where to save/load.
+        # Pass args (including output_path) to the Experiment class
+        exp = Exp(args)  # set experiments
+        print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
+        exp.train(setting)
 
-            # Pass args (including output_path) to the Experiment class
-            exp = Exp(args)  # set experiments
-            print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-            exp.train(setting)
+        # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+        # exp.test(setting)
 
-            # print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            # exp.test(setting)
+        if args.do_predict:
+            print('>>>>>>>predicting : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+            exp.predict(setting, True)
 
-            if args.do_predict:
-                print('>>>>>>>predicting : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-                exp.predict(setting, True)
-
-            torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
     else:
         # Testing: The shell script must provide the correct --output_path
         # pointing to the specific directory containing the trained model for this run/fold.

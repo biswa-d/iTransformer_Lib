@@ -33,16 +33,15 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
 
-    def _get_data(self, flag, test_file=None):
-        # Override data_path for the 'test' flag if test_file is provided
-        if flag == 'test' and test_file:
-            self.args.data_path = test_file  # Use the provided test file path
+    def _get_data(self, flag): # Removed test_file parameter
+        # self.args.data_path should be correctly set by run.py based on shell args
+        # No need to override it here.
 
         # <<<--- Add Debug Print Here --->>>
         print(f"[DEBUG] In _get_data (flag='{flag}'), using self.args.data_path: {self.args.data_path}")
         # <<<--------------------------->>>
 
-        # Call the data_provider with updated args
+        # Call the data_provider with current args
         data_set, data_loader = data_provider(self.args, flag)
         return data_set, data_loader
 
@@ -302,26 +301,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         # --- Final Model Selection and Saving --- 
         # EarlyStopping saved the best model as checkpoint.pth.
-        # Load the best model state dict to ensure self.model has it.
-        best_model_path = os.path.join(output_path, 'checkpoint.pth')
-        try:
-            print(f"Loading best model from {best_model_path} for potential post-training use.")
-            best_state_dict = torch.load(best_model_path)
-            # Handle DataParallel prefix if necessary when loading into self.model
-            if isinstance(self.model, nn.DataParallel):
-                # If model is wrapped, load into module
-                self.model.module.load_state_dict(best_state_dict)
-            else:
-                # If model is not wrapped, try loading directly
-                # If best_state_dict has 'module.' prefix, remove it
-                if list(best_state_dict.keys())[0].startswith('module.'):
-                    print("Removing 'module.' prefix from saved state dict keys.")
-                    best_state_dict = {k.replace('module.', '', 1): v for k, v in best_state_dict.items()}
-                self.model.load_state_dict(best_state_dict)
-            print("Successfully loaded best model state into self.model.")
-        except Exception as e:
-            print(f"Warning: Error loading best checkpoint {best_model_path} after training: {e}")
-            print("Proceeding with the model state at the end of training loop.")
+        # No need to reload it here; test/simulate methods will load it.
+        print(f"Best model saved by EarlyStopping to {os.path.join(output_path, 'checkpoint.pth')}")
 
         # --- Save Best Validation Loss (from EarlyStopping) ---
         best_val_loss = early_stopping.val_loss_min
@@ -341,13 +322,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return self.model
 
     def test(self, setting, test=0):
-        # Set the test file dynamically
-        test_file = self.args.data_path
-        if not test_file:
-            raise ValueError("Custom test file is required for testing.")
+        # self.args.data_path should already hold the correct test file path
+        # passed from run.py / shell script.
+        if not self.args.data_path:
+             raise ValueError("Test data path (args.data_path) is required for testing.")
 
-        print(f"Testing with custom test file: {test_file}")
-        test_data, test_loader = self._get_data(flag='test', test_file=test_file)
+        print(f"Testing with data file: {self.args.data_path}")
+        # Call _get_data without the test_file override
+        test_data, test_loader = self._get_data(flag='test')
         
         # Now data_x has 3 features, data_y has 4 (3 features + target V)
         # Comment out references to test_data.data_x and test_data.data_y as they no longer exist
@@ -373,13 +355,25 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                  raise FileNotFoundError(f"Checkpoint file not found at {model_load_path}. Ensure training completed successfully.")
             
             # <<< Load state dict, handling DataParallel >>>
-            loaded_state_dict = torch.load(model_load_path)
+            loaded_state_dict = torch.load(model_load_path, map_location=self.device) # Ensure map_location
+            
+            # Check if state_dict has 'module.' prefix
+            has_module_prefix = list(loaded_state_dict.keys())[0].startswith('module.')
+            
             if isinstance(self.model, nn.DataParallel):
                 print("Loading state dict into self.model.module (DataParallel detected)")
-                self.model.module.load_state_dict(loaded_state_dict)
+                if not has_module_prefix:
+                    # Add 'module.' prefix if saved state_dict doesn't have it but model is wrapped
+                    print("Adding 'module.' prefix to keys in loaded state_dict.")
+                    loaded_state_dict = {'module.' + k: v for k, v in loaded_state_dict.items()}
+                self.model.load_state_dict(loaded_state_dict) # Load into the wrapped model
             else:
                 print("Loading state dict directly into self.model")
-                self.model.load_state_dict(loaded_state_dict)
+                if has_module_prefix:
+                    # Remove 'module.' prefix if saved state_dict has it but model is not wrapped
+                    print("Removing 'module.' prefix from keys in loaded state_dict.")
+                    loaded_state_dict = {k.replace('module.', '', 1): v for k, v in loaded_state_dict.items()}
+                self.model.load_state_dict(loaded_state_dict) # Load into the unwrapped model
             # <<< End loading logic >>>
 
         # Store predictions (only for Voltage) and true values (only for Voltage)
@@ -493,10 +487,23 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         loaded_state_dict = torch.load(model_load_path, map_location=self.device)
         if isinstance(self.model, nn.DataParallel):
             print("Loading state dict into self.model.module (DataParallel detected)")
-            self.model.module.load_state_dict(loaded_state_dict)
-        else:
-            print("Loading state dict directly into self.model")
-            self.model.load_state_dict(loaded_state_dict)
+            # Check if state_dict has 'module.' prefix
+            has_module_prefix = list(loaded_state_dict.keys())[0].startswith('module.')
+
+            if isinstance(self.model, nn.DataParallel):
+                print("Loading state dict into self.model.module (DataParallel detected)")
+                if not has_module_prefix:
+                    # Add 'module.' prefix if saved state_dict doesn't have it but model is wrapped
+                    print("Adding 'module.' prefix to keys in loaded state_dict.")
+                    loaded_state_dict = {'module.' + k: v for k, v in loaded_state_dict.items()}
+                self.model.load_state_dict(loaded_state_dict) # Load into the wrapped model
+            else:
+                print("Loading state dict directly into self.model")
+                if has_module_prefix:
+                    # Remove 'module.' prefix if saved state_dict has it but model is not wrapped
+                    print("Removing 'module.' prefix from keys in loaded state_dict.")
+                    loaded_state_dict = {k.replace('module.', '', 1): v for k, v in loaded_state_dict.items()}
+                self.model.load_state_dict(loaded_state_dict) # Load into the unwrapped model
         self.model.eval() # Set model to evaluation mode
 
         # 2. Get Test Data Object and Scaler
