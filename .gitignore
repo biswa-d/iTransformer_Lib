@@ -140,4 +140,5 @@ run_logs/
 log_*
 checkpoints/
 run_outputs/
+run_cv/
 
