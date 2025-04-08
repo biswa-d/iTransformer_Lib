@@ -243,5 +243,6 @@ if args.is_training:
             exp.simulate(setting) # Assuming simulate method loads the model
         else:
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            exp.test(setting, test=1)
+            # Pass the correct test data path explicitly
+            exp.test(setting, args.data_path, test=1)
         torch.cuda.empty_cache()

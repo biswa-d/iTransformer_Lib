@@ -321,15 +321,17 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0):
-        # self.args.data_path should already hold the correct test file path
-        # passed from run.py / shell script.
-        if not self.args.data_path:
-             raise ValueError("Test data path (args.data_path) is required for testing.")
+    def test(self, setting, test_data_path, test=0): # Added test_data_path argument
+        # Use the explicitly passed test_data_path
+        if not test_data_path:
+             raise ValueError("test_data_path argument is required for testing.")
 
-        print(f"Testing with data file: {self.args.data_path}")
-        # Call _get_data without the test_file override
+        print(f"Testing with data file: {test_data_path}")
+        # Temporarily set self.args.data_path for _get_data call
+        original_data_path = self.args.data_path
+        self.args.data_path = test_data_path
         test_data, test_loader = self._get_data(flag='test')
+        self.args.data_path = original_data_path # Restore original path if needed elsewhere
         
         # Now data_x has 3 features, data_y has 4 (3 features + target V)
         # Comment out references to test_data.data_x and test_data.data_y as they no longer exist
