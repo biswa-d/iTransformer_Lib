@@ -6,8 +6,8 @@ BASE_MODEL_ID="cv5_3input" # Base name for this CV run
 MODEL="iTransformer"
 DATA="custom"
 ROOT_PATH="./data/"
-TRAIN_DATA="sample_data/sample_data_train.csv" # Use the training data file for CV
-TEST_DATA="sample_data/sample_data_test.csv" # Use the actual test dataset for final evaluation
+TRAIN_DATA="sample_data/lg_train.csv" # Use the training data file for CV
+TEST_DATA="sample_data/lg_test.csv" # Use the actual test dataset for final evaluation
 FEATURES="MS"
 TARGET="Voltage"
 SEQ_LEN=200
@@ -18,7 +18,7 @@ DEC_IN=3
 C_OUT=1
 D_MODEL=32
 N_HEADS=2
-E_LAYERS=2
+E_LAYERS=1
 D_LAYERS=1
 D_FF=16
 MOVING_AVG=25
@@ -34,6 +34,15 @@ DROPOUT=0.35
 WEIGHT_DECAY=1e-4
 USE_AMP=True
 USE_NORM=0
+INVERSE=true
+
+# <<< Warmup Option >>>
+LR_WARMUP_EPOCHS=5 # Set to 0 to disable
+
+# <<< Custom Multi-Phase Schedule Params >>>
+MAIN_DECAY_EPOCHS=100 # Number of epochs for initial cosine decay after warmup (Set > 0 to enable custom)
+EXPLOIT_LR=0.0002     # Starting LR for exploitation cycles (defaults to min_lr if None/empty)
+EXPLOIT_CYCLE_EPOCHS=20 # Length of each exploitation cycle
 
 # --- Learning Rate Schedule Option (Set ONE block) ---
 SCHEDULER='cosine'
@@ -123,7 +132,12 @@ do
         --cosine_T_max $COSINE_T_MAX
         --cosine_eta_min $COSINE_ETA_MIN
         --use_norm $USE_NORM
-        --inverse
+        $( [[ "$INVERSE" == true ]] && echo "--inverse" )
+        --optimizer adamw
+        --lr_warmup_epochs "$LR_WARMUP_EPOCHS"
+        --main_decay_epochs "$MAIN_DECAY_EPOCHS"
+        $( [ ! -z "$EXPLOIT_LR" ] && echo "--exploit_lr $EXPLOIT_LR" )
+        --exploit_cycle_epochs "$EXPLOIT_CYCLE_EPOCHS"
     )
     if [ "$USE_AMP" = True ]; then TRAIN_ARGS+=(--use_amp); fi
 
@@ -187,6 +201,7 @@ do
         --scheduler 'none'
         --use_norm $USE_NORM
         --inverse
+        --optimizer adamw
     )
      if [ "$USE_AMP" = True ]; then TEST_ARGS+=(--use_amp); fi
 

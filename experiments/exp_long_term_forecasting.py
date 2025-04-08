@@ -15,6 +15,9 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from utils.timefeatures import time_features
 from torch.optim.lr_scheduler import CosineAnnealingLR
+# <<< SWA Imports >>>
+from torch.optim.swa_utils import AveragedModel, SWALR
+# <<< End SWA Imports >>>
 
 warnings.filterwarnings('ignore')
 
@@ -44,9 +47,26 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        model_optim = optim.Adam(self.model.parameters(), 
-                               lr=self.args.learning_rate,
-                               weight_decay=self.args.weight_decay)
+        if self.args.optimizer.lower() == 'adamw':
+            print("Using AdamW optimizer")
+            model_optim = optim.AdamW(self.model.parameters(), 
+                                   lr=self.args.learning_rate,
+                                   weight_decay=self.args.weight_decay) # AdamW handles weight decay correctly
+        elif self.args.optimizer.lower() == 'adam':
+            print("Using Adam optimizer")
+            model_optim = optim.Adam(self.model.parameters(), 
+                                   lr=self.args.learning_rate,
+                                   weight_decay=self.args.weight_decay) # Standard Adam with L2 regularization
+        else:
+            # Default to Adam if optimizer arg is missing or unsupported
+            if not hasattr(self.args, 'optimizer'):
+                 print("Optimizer argument not found, defaulting to Adam.")
+            else:
+                 print(f"Warning: Unsupported optimizer '{self.args.optimizer}'. Defaulting to Adam.")
+            model_optim = optim.Adam(self.model.parameters(), 
+                                   lr=self.args.learning_rate,
+                                   weight_decay=self.args.weight_decay)
+                                   
         return model_optim
 
     def _select_criterion(self):
@@ -127,17 +147,36 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         model_optim = self._select_optimizer()
         criterion = self._select_criterion()
 
-        # Initialize Scheduler
-        scheduler = None
-        if self.args.scheduler == 'cosine':
-            if self.args.cosine_T_max is None:
-                T_max = self.args.train_epochs
-            else:
-                T_max = self.args.cosine_T_max
-            scheduler = CosineAnnealingLR(model_optim, 
-                                        T_max=T_max, 
-                                        eta_min=self.args.cosine_eta_min)
-            print(f"Using CosineAnnealingLR scheduler with T_max={T_max}, eta_min={self.args.cosine_eta_min}")
+        # <<< Custom LR Schedule Setup >>>
+        initial_lr = 1e-8 # Start from a very small LR for warmup
+        base_lr = self.args.learning_rate
+        min_lr = self.args.cosine_eta_min # Use this as the minimum target LR
+        warmup_epochs = self.args.lr_warmup_epochs
+        # Check if custom multi-phase schedule is active
+        use_custom_schedule = self.args.main_decay_epochs > 0
+        main_decay_epochs = self.args.main_decay_epochs if use_custom_schedule else 0
+        exploit_lr = self.args.exploit_lr if self.args.exploit_lr is not None else min_lr
+        exploit_cycle_epochs = self.args.exploit_cycle_epochs if use_custom_schedule else 1 # Avoid division by zero if not used
+        
+        if use_custom_schedule:
+            print("--- Using Custom Multi-Phase LR Schedule --- ")
+            print(f"  Warmup Epochs: {warmup_epochs} (to {base_lr:.7f})")
+            print(f"  Main Decay Epochs: {main_decay_epochs} (Cosine from {base_lr:.7f} to {min_lr:.7f})")
+            print(f"  Exploit Start LR: {exploit_lr:.7f}")
+            print(f"  Exploit Cycle Epochs: {exploit_cycle_epochs} (Cosine from {exploit_lr:.7f} to {min_lr:.7f})")
+        elif warmup_epochs > 0:
+             print(f"Using linear LR warmup for {warmup_epochs} epochs, from {initial_lr} to {base_lr}")
+        else:
+             print(f"Using fixed learning rate: {base_lr}") # Or potentially other default logic if needed
+             
+        # Set initial optimizer LR if warming up
+        if warmup_epochs > 0:
+            for param_group in model_optim.param_groups:
+                param_group['lr'] = initial_lr
+        else: # Set base LR if no warmup
+             for param_group in model_optim.param_groups:
+                 param_group['lr'] = base_lr
+        # <<< End Custom LR Schedule Setup >>>
 
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
@@ -208,6 +247,46 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     loss.backward()
                     model_optim.step()
 
+            # <<< Implement Custom LR Adjustment >>>
+            current_epoch_num = epoch + 1
+            new_lr = -1 # Placeholder
+
+            if use_custom_schedule:
+                # Phase 1: Warmup
+                if warmup_epochs > 0 and current_epoch_num <= warmup_epochs:
+                    warmup_factor = current_epoch_num / warmup_epochs
+                    new_lr = initial_lr + (base_lr - initial_lr) * warmup_factor
+                # Phase 2: Main Decay
+                elif current_epoch_num <= warmup_epochs + main_decay_epochs:
+                    # Calculate progress within the main decay phase
+                    epoch_in_main_decay = current_epoch_num - warmup_epochs
+                    # Cosine annealing calculation
+                    cosine_decay = 0.5 * (1 + np.cos(np.pi * epoch_in_main_decay / main_decay_epochs))
+                    new_lr = min_lr + (base_lr - min_lr) * cosine_decay
+                # Phase 3: Exploitation Cycles
+                else:
+                    # Calculate progress within the current exploitation cycle
+                    epoch_in_exploitation_phase = current_epoch_num - warmup_epochs - main_decay_epochs
+                    # Use modulo to find position within the cycle (1-based for calculation)
+                    epoch_in_current_cycle = (epoch_in_exploitation_phase - 1) % exploit_cycle_epochs + 1
+                    # Cosine annealing calculation for the cycle
+                    cosine_decay_exploit = 0.5 * (1 + np.cos(np.pi * epoch_in_current_cycle / exploit_cycle_epochs))
+                    new_lr = min_lr + (exploit_lr - min_lr) * cosine_decay_exploit
+            else: 
+                # Fallback to only warmup if custom schedule is not enabled
+                 if warmup_epochs > 0 and current_epoch_num <= warmup_epochs:
+                     warmup_factor = current_epoch_num / warmup_epochs
+                     new_lr = initial_lr + (base_lr - initial_lr) * warmup_factor
+                 else:
+                     new_lr = base_lr # Maintain base LR if no warmup and no custom schedule
+            
+            # Set the calculated LR in the optimizer
+            if new_lr != -1: # Only set if calculated
+                 # print(f"Epoch {current_epoch_num}: Setting LR to {new_lr:.7f}") # Optional debug
+                 for param_group in model_optim.param_groups:
+                     param_group['lr'] = new_lr
+            # <<< End Custom LR Adjustment >>>
+
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
@@ -215,36 +294,76 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss))
-            # Call early stopping without the path argument
-            early_stopping(vali_loss, self.model)
+            
+            # --- Early Stopping Logic --- 
+            # Decide whether to stop based on pre-SWA model performance
+            # Or potentially evaluate swa_model on validation set periodically?
+            # Current setup: Stops based on the original model's val loss.
+            # SWA model is only finalized at the end.
+            early_stopping(vali_loss, self.model) 
             if early_stopping.early_stop:
-                print("Early stopping")
+                print("Early stopping triggered.")
                 break
+            # --- End Early Stopping --- 
 
-            # Adjust learning rate based on scheduler or manual function
-            if scheduler:
-                scheduler.step()
-                # Optional: Print current LR
-                # current_lr = scheduler.get_last_lr()[0]
-                # print(f"Epoch {epoch + 1}: LR adjusted by scheduler to {current_lr:.7f}")
-            elif self.args.lradj != 'none': # Keep old adjustment if no scheduler
-                adjust_learning_rate(model_optim, epoch + 1, self.args)
+        # --- Final Model Selection and Saving --- 
+        # Always load the best single model found by Early Stopping
+        print("Loading best model based on validation loss (Early Stopping checkpoint).")
+        best_model_path_es = os.path.join(output_path, 'checkpoint.pth') 
+        final_model_state_dict = None
+        try:
+            # Load the state dict from the best checkpoint
+            final_model_state_dict = torch.load(best_model_path_es)
+            # Load it into the current model instance
+            self.model.load_state_dict(final_model_state_dict)
+            print(f"Successfully loaded best checkpoint from {best_model_path_es}")
+        except Exception as e:
+            print(f"Error loading early stopping checkpoint {best_model_path_es}: {e}")
+            print("Proceeding with the model state at the end of training loop.")
+            # Use the model state as it was at the end of the loop
+            final_model_state_dict = self.model.state_dict()
 
-            # get_cka(self.args, setting, self.model, train_loader, self.device, epoch)
-
-        # --- Save Best Validation Loss --- 
+        # --- Save Best Validation Loss (from EarlyStopping) --- 
         best_val_loss = early_stopping.val_loss_min
         val_loss_file_path = os.path.join(output_path, 'best_vali_loss.txt')
         try:
             with open(val_loss_file_path, 'w') as f:
                 f.write(f"{best_val_loss:.7f}")
-            print(f"Best validation loss ({best_val_loss:.7f}) saved to {val_loss_file_path}")
+            print(f"Best validation loss during training ({best_val_loss:.7f}) saved to {val_loss_file_path}")
         except Exception as e:
             print(f"Error saving best validation loss: {e}")
         # --- End Save --- 
 
-        best_model_path = os.path.join(output_path, 'checkpoint.pth') # Use output_path directly
-        self.model.load_state_dict(torch.load(best_model_path))
+        # <<< Save the chosen final model (Always the best ES model now) >>>
+        final_model_path = os.path.join(output_path, 'final_model.pth') 
+        try:
+            # Unwrap DataParallel if necessary before saving
+            model_to_save_state = self.model # Start with the potentially loaded best model
+            if isinstance(model_to_save_state, nn.DataParallel):
+                model_to_save_state = model_to_save_state.module # Unwrap DataParallel
+                
+            # Save the state dict (either loaded best or final loop state)
+            torch.save(model_to_save_state.state_dict(), final_model_path)
+            print(f"Final model state dict saved to {final_model_path}")
+        except Exception as e:
+            print(f"Error saving final model state dict: {e}")
+
+        # Ensure self.model has the final state loaded for immediate use
+        # (Already done when loading from checkpoint, just ensure consistency)
+        if final_model_state_dict:
+            try:
+                # Reload into self.model just in case it was modified (unlikely here)
+                # Need to handle DataParallel wrapping if loading into self.model which might be wrapped
+                if isinstance(self.model, nn.DataParallel):
+                     self.model.module.load_state_dict(final_model_state_dict)
+                else:
+                     self.model.load_state_dict(final_model_state_dict)
+                print("Ensured self.model holds the final state.")
+            except Exception as e:
+                 print(f"Error ensuring self.model holds the final state: {e}")
+        else:
+             print("Warning: Could not ensure self.model holds final state as state_dict was not available.")
+
 
         return self.model
 
@@ -282,14 +401,27 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if test:
             print('loading model')
             # Construct path using the determined base directory and setting
-            constructed_path = os.path.join(setting_base_dir, setting, 'checkpoint.pth')
+            # <<< Load the final_model.pth instead of checkpoint.pth >>>
+            model_load_path = os.path.join(setting_base_dir, setting, 'final_model.pth') 
             # Force flush the output
-            print(f"DEBUG: Attempting to load model from: {constructed_path}", flush=True) 
+            print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True) 
             # Load model from the constructed path
-            model_path = constructed_path
-            if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Checkpoint not found at {model_path}. Ensure training completed successfully for this setting.")
-            self.model.load_state_dict(torch.load(model_path))
+            if not os.path.exists(model_load_path):
+                # Fallback to trying checkpoint.pth if final_model.pth doesn't exist (for older runs)
+                print(f"Warning: final_model.pth not found at {model_load_path}. Trying checkpoint.pth...")
+                model_load_path = os.path.join(setting_base_dir, setting, 'checkpoint.pth')
+                if not os.path.exists(model_load_path):
+                    raise FileNotFoundError(f"Neither final_model.pth nor checkpoint.pth found in {os.path.join(setting_base_dir, setting)}. Ensure training completed successfully.")
+            
+            # <<< Load state dict, handling DataParallel >>>
+            loaded_state_dict = torch.load(model_load_path)
+            if isinstance(self.model, nn.DataParallel):
+                print("Loading state dict into self.model.module (DataParallel detected)")
+                self.model.module.load_state_dict(loaded_state_dict)
+            else:
+                print("Loading state dict directly into self.model")
+                self.model.load_state_dict(loaded_state_dict)
+            # <<< End loading logic >>>
 
         # Store predictions (only for Voltage) and true values (only for Voltage)
         voltage_preds = []

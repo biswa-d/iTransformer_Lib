@@ -113,10 +113,39 @@ if __name__ == '__main__':
     parser.add_argument('--cosine_eta_min', type=float, default=0.0, 
                         help='Minimum learning rate for CosineAnnealingLR')
 
+    # <<< Add LR Warmup Argument >>>
+    parser.add_argument('--lr_warmup_epochs', type=int, default=0,
+                        help='Number of epochs for linear learning rate warmup (0 to disable)')
+    # <<< End LR Warmup Argument >>>
+
     # K-Fold Cross-Validation Arguments
     parser.add_argument('--k_folds', type=int, default=0, help='Number of folds for K-Fold CV (0 means disabled)')
     parser.add_argument('--fold', type=int, default=0, help='Current fold index (0 to k_folds-1) for K-Fold CV')
     parser.add_argument('--cv_run_dir', type=str, default=None, help='Base output directory for the entire CV run (used if k_folds > 0)')
+
+    # <<< SWA Arguments >>>
+    parser.add_argument('--use_swa', action='store_true', help='Enable Stochastic Weight Averaging')
+    parser.add_argument('--swa_start_frac', type=float, default=0.75,
+                        help='Fraction of epochs to complete before starting SWA (e.g., 0.75 for last 25%%)')
+    parser.add_argument('--swa_lr', type=float, default=None,
+                        help='SWA learning rate. If None, uses the base learning_rate.')
+    parser.add_argument('--swa_anneal_epochs', type=int, default=10,
+                        help='Number of epochs in the SWA annealing strategy')
+    # <<< End SWA Arguments >>>
+
+    # <<< Add Optimizer Choice Argument >>>
+    parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'adamw'],
+                        help='Optimizer to use (adam or adamw)')
+    # <<< End Optimizer Choice >>>
+
+    # <<< Args for Custom Multi-Phase LR Schedule >>>
+    parser.add_argument('--main_decay_epochs', type=int, default=0,
+                        help='Epochs for main LR decay phase after warmup (0 disables custom schedule)')
+    parser.add_argument('--exploit_lr', type=float, default=None,
+                        help='Starting LR for exploitation cycles (defaults to cosine_eta_min)')
+    parser.add_argument('--exploit_cycle_epochs', type=int, default=10,
+                        help='Length of each exploitation cycle')
+    # <<< End Custom LR Schedule Args >>>
 
     args = parser.parse_args()
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
