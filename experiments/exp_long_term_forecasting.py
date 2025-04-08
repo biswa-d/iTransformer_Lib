@@ -301,25 +301,30 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             # --- End Early Stopping --- 
 
         # --- Final Model Selection and Saving --- 
-        # Always load the best single model found by Early Stopping
-        print("Loading best model based on validation loss (Early Stopping checkpoint).")
-        best_model_path_es = os.path.join(output_path, 'checkpoint.pth') 
-        final_model_state_dict = None
+        # EarlyStopping saved the best model as checkpoint.pth.
+        # Load the best model state dict to ensure self.model has it.
+        best_model_path = os.path.join(output_path, 'checkpoint.pth')
         try:
-            # Load the state dict from the best checkpoint
-            final_model_state_dict = torch.load(best_model_path_es)
-            # Load it into the current model instance
-            self.model.load_state_dict(final_model_state_dict)
-            print(f"Successfully loaded best checkpoint from {best_model_path_es}")
+            print(f"Loading best model from {best_model_path} for potential post-training use.")
+            best_state_dict = torch.load(best_model_path)
+            # Handle DataParallel prefix if necessary when loading into self.model
+            if isinstance(self.model, nn.DataParallel):
+                # If model is wrapped, load into module
+                self.model.module.load_state_dict(best_state_dict)
+            else:
+                # If model is not wrapped, try loading directly
+                # If best_state_dict has 'module.' prefix, remove it
+                if list(best_state_dict.keys())[0].startswith('module.'):
+                    print("Removing 'module.' prefix from saved state dict keys.")
+                    best_state_dict = {k.replace('module.', '', 1): v for k, v in best_state_dict.items()}
+                self.model.load_state_dict(best_state_dict)
+            print("Successfully loaded best model state into self.model.")
         except Exception as e:
-            print(f"Error loading early stopping checkpoint {best_model_path_es}: {e}")
+            print(f"Warning: Error loading best checkpoint {best_model_path} after training: {e}")
             print("Proceeding with the model state at the end of training loop.")
-            # Use the model state as it was at the end of the loop
-            final_model_state_dict = self.model.state_dict()
 
-        # --- Save Best Validation Loss (from EarlyStopping) --- 
+        # --- Save Best Validation Loss (from EarlyStopping) ---
         best_val_loss = early_stopping.val_loss_min
-        # Save best validation loss directly to the provided output_path
         val_loss_file_path = os.path.join(output_path, 'best_vali_loss.txt')
         try:
             with open(val_loss_file_path, 'w') as f:
@@ -327,38 +332,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             print(f"Best validation loss during training ({best_val_loss:.7f}) saved to {val_loss_file_path}")
         except Exception as e:
             print(f"Error saving best validation loss: {e}")
-        # --- End Save --- 
+        # --- End Save ---
 
-        # <<< Save the chosen final model (Always the best ES model now) >>>
-        # Save final model directly to the provided output_path
-        final_model_path = os.path.join(output_path, 'final_model.pth')
-        try:
-            # Unwrap DataParallel if necessary before saving
-            model_to_save_state = self.model # Start with the potentially loaded best model
-            if isinstance(model_to_save_state, nn.DataParallel):
-                model_to_save_state = model_to_save_state.module # Unwrap DataParallel
-                
-            # Save the state dict (either loaded best or final loop state)
-            torch.save(model_to_save_state.state_dict(), final_model_path)
-            print(f"Final model state dict saved to {final_model_path}")
-        except Exception as e:
-            print(f"Error saving final model state dict: {e}")
-
-        # Ensure self.model has the final state loaded for immediate use
-        # (Already done when loading from checkpoint, just ensure consistency)
-        if final_model_state_dict:
-            try:
-                # Reload into self.model just in case it was modified (unlikely here)
-                # Need to handle DataParallel wrapping if loading into self.model which might be wrapped
-                if isinstance(self.model, nn.DataParallel):
-                     self.model.module.load_state_dict(final_model_state_dict)
-                else:
-                     self.model.load_state_dict(final_model_state_dict)
-                print("Ensured self.model holds the final state.")
-            except Exception as e:
-                 print(f"Error ensuring self.model holds the final state: {e}")
-        else:
-             print("Warning: Could not ensure self.model holds final state as state_dict was not available.")
+        # No longer saving final_model.pth separately.
+        # No longer reloading the model here, already loaded above.
 
 
         return self.model
@@ -389,15 +366,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if test:
             print('loading model')
             # Construct path to the model file within the provided output_path
-            model_load_path = os.path.join(output_path, 'final_model.pth')
+            # Load the best model saved by EarlyStopping
+            model_load_path = os.path.join(output_path, 'checkpoint.pth')
             print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True)
             if not os.path.exists(model_load_path):
-                print(f"Warning: final_model.pth not found at {model_load_path}. Trying checkpoint.pth...")
-                model_load_path_fallback = os.path.join(output_path, 'checkpoint.pth')
-                if not os.path.exists(model_load_path_fallback):
-                    raise FileNotFoundError(f"Neither final_model.pth nor checkpoint.pth found in {output_path}. Ensure training completed successfully.")
-                else:
-                    model_load_path = model_load_path_fallback # Use fallback path
+                 raise FileNotFoundError(f"Checkpoint file not found at {model_load_path}. Ensure training completed successfully.")
             
             # <<< Load state dict, handling DataParallel >>>
             loaded_state_dict = torch.load(model_load_path)
@@ -509,15 +482,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print(f"Starting simulation for setting: {setting}")
 
         # 1. Load Model Checkpoint from the provided output_path
-        model_load_path = os.path.join(output_path, 'final_model.pth')
+        # Load the best model saved by EarlyStopping
+        model_load_path = os.path.join(output_path, 'checkpoint.pth')
         print(f"DEBUG: Attempting to load model from: {model_load_path}", flush=True)
         if not os.path.exists(model_load_path):
-            print(f"Warning: final_model.pth not found at {model_load_path}. Trying checkpoint.pth...")
-            model_load_path_fallback = os.path.join(output_path, 'checkpoint.pth')
-            if not os.path.exists(model_load_path_fallback):
-                raise FileNotFoundError(f"Neither final_model.pth nor checkpoint.pth found in {output_path}. Ensure training completed successfully.")
-            else:
-                model_load_path = model_load_path_fallback # Use fallback path
+             raise FileNotFoundError(f"Checkpoint file not found at {model_load_path}. Ensure training completed successfully.")
 
         print(f"Loading model from: {model_load_path}")
         # Load state dict, handling DataParallel
