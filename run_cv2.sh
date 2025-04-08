@@ -29,7 +29,7 @@ BATCH_SIZE=200
 TEST_BATCH_SIZE=200
 NUM_WORKERS=10
 PATIENCE=200
-LEARNING_RATE=0.0008
+LEARNING_RATE=0.001
 DROPOUT=0.35
 WEIGHT_DECAY=1e-4
 USE_AMP=True
@@ -41,7 +41,7 @@ LR_WARMUP_EPOCHS=5 # Set to 0 to disable
 
 # <<< Custom Multi-Phase Schedule Params >>>
 MAIN_DECAY_EPOCHS=100 # Number of epochs for initial cosine decay after warmup (Set > 0 to enable custom)
-EXPLOIT_LR=0.0002     # Starting LR for exploitation cycles (defaults to min_lr if None/empty)
+EXPLOIT_LR=0.0003     # Starting LR for exploitation cycles (defaults to min_lr if None/empty)
 EXPLOIT_CYCLE_EPOCHS=20 # Length of each exploitation cycle
 
 # --- Learning Rate Schedule Option (Set ONE block) ---
