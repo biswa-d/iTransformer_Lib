@@ -33,16 +33,24 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
 
-    def _get_data(self, flag): # Removed test_file parameter
-        # self.args.data_path should be correctly set by run.py based on shell args
-        # No need to override it here.
+    def _get_data(self, flag, data_path_override=None): # Added data_path_override
+        # Use override if provided, otherwise use the path from the args object
+        current_data_path = data_path_override if data_path_override else self.args.data_path
+        if not current_data_path:
+             raise ValueError(f"Data path is missing for flag '{flag}'.")
 
-        # <<<--- Add Debug Print Here --->>>
-        print(f"[DEBUG] In _get_data (flag='{flag}'), using self.args.data_path: {self.args.data_path}")
-        # <<<--------------------------->>>
+        print(f"[DEBUG] In _get_data (flag='{flag}'), using data_path: {current_data_path}")
 
-        # Call the data_provider with current args
-        data_set, data_loader = data_provider(self.args, flag)
+        # Temporarily modify args for data_provider call, then restore.
+        # This assumes data_provider doesn't store the args object itself.
+        original_data_path = self.args.data_path
+        self.args.data_path = current_data_path
+        try:
+            data_set, data_loader = data_provider(self.args, flag)
+        finally:
+            # Ensure original path is restored even if data_provider fails
+            self.args.data_path = original_data_path
+
         return data_set, data_loader
 
     def _select_optimizer(self):
@@ -327,11 +335,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
              raise ValueError("test_data_path argument is required for testing.")
 
         print(f"Testing with data file: {test_data_path}")
-        # Temporarily set self.args.data_path for _get_data call
-        original_data_path = self.args.data_path
-        self.args.data_path = test_data_path
-        test_data, test_loader = self._get_data(flag='test')
-        self.args.data_path = original_data_path # Restore original path if needed elsewhere
+        # Pass the explicit test_data_path to _get_data
+        test_data, test_loader = self._get_data(flag='test', data_path_override=test_data_path)
         
         # Now data_x has 3 features, data_y has 4 (3 features + target V)
         # Comment out references to test_data.data_x and test_data.data_y as they no longer exist
@@ -511,7 +516,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # 2. Get Test Data Object and Scaler
         # Use flag='test' to get the dataset object configured for test data
         # We need direct access to its data_x, data_stamp, and scaler
-        test_data, _ = self._get_data(flag='test', test_file=self.args.data_path)
+        # Pass the data path from args explicitly
+        test_data, _ = self._get_data(flag='test', data_path_override=self.args.data_path)
         # scaler = test_data.scaler # Removed: No longer using internal scaler
         # Note the warning about the scaler potentially being fit on test data
         print(f"Using test data file: {self.args.data_path}")

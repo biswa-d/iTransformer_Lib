@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Base Configuration (from run_experiment_3_input.sh) ---
-K_FOLDS=5 # Number of folds
+K_FOLDS=2 # Number of folds
 BASE_MODEL_ID="cv5_3input" # Base name for this CV run
 MODEL="iTransformer"
 DATA="custom"
@@ -72,148 +72,89 @@ echo "Base Model ID: $BASE_MODEL_ID"
 echo "Epochs per Fold: $TRAIN_EPOCHS_PER_FOLD"
 echo "Test Data: $TEST_DATA"
 
-FOLD_PATHS=() # Array to store full fold output paths
+# --- Construct Arguments for run_cv.py ---
+CV_ARGS=(
+    --k_folds $K_FOLDS
+    --cv_base_path "$MAIN_JOB_DIR"
+    --test_data_path "$TEST_DATA"
+    --model_id "$BASE_MODEL_ID" # Pass base model ID
+    --model "$MODEL"
+    --data "$DATA"
+    --root_path "$ROOT_PATH"
+    --data_path "$TRAIN_DATA" # Pass training data path
+    --features "$FEATURES"
+    --target "$TARGET"
+    --seq_len "$SEQ_LEN"
+    --label_len "$LABEL_LEN"
+    --pred_len "$PRED_LEN"
+    --enc_in "$ENC_IN"
+    --dec_in "$DEC_IN"
+    --c_out "$C_OUT"
+    --d_model "$D_MODEL"
+    --n_heads "$N_HEADS"
+    --e_layers "$E_LAYERS"
+    --d_layers "$D_LAYERS"
+    --d_ff "$D_FF"
+    --moving_avg "$MOVING_AVG"
+    --factor "$FACTOR"
+    --devices "$DEVICES"
+    --train_epochs "$TRAIN_EPOCHS_PER_FOLD"
+    --batch_size "$BATCH_SIZE"
+    --test_batch_size "$TEST_BATCH_SIZE" # Pass test batch size
+    --num_workers "$NUM_WORKERS"
+    --patience "$PATIENCE"
+    --learning_rate "$LEARNING_RATE"
+    --dropout "$DROPOUT"
+    --weight_decay $WEIGHT_DECAY
+    --lradj $LRADJ
+    --lr_decay_factor $LR_DECAY_FACTOR
+    --lr_decay_period $LR_DECAY_PERIOD
+    --scheduler $SCHEDULER
+    --cosine_T_max $COSINE_T_MAX
+    --cosine_eta_min $COSINE_ETA_MIN
+    --use_norm $USE_NORM
+    $( [[ "$INVERSE" == true ]] && echo "--inverse" )
+    --optimizer adamw
+    --lr_warmup_epochs "$LR_WARMUP_EPOCHS"
+    --main_decay_epochs "$MAIN_DECAY_EPOCHS"
+    $( [ ! -z "$EXPLOIT_LR" ] && echo "--exploit_lr $EXPLOIT_LR" )
+    --exploit_cycle_epochs "$EXPLOIT_CYCLE_EPOCHS"
+    # Add other necessary args like --use_amp, --use_swa etc.
+)
+if [ "$USE_AMP" = True ]; then CV_ARGS+=(--use_amp); fi
+# Add SWA args if needed
+# if [ "$USE_SWA" = True ]; then CV_ARGS+=(--use_swa --swa_start_frac $SWA_START_FRAC ...); fi
 
-for (( k=0; k<$K_FOLDS; k++ ))
-do
-    echo ""
-    echo "===== Starting Fold $k / $K_FOLDS ====="
-    CURRENT_FOLD_ID="${BASE_MODEL_ID}_fold${k}"
-    # Timestamp for this specific fold's execution (can be useful for logs)
-    # FOLD_RUN_TIMESTAMP=$(date +'%Y%m%d_%H%M%S') # No longer needed for path/setting
+# --- Execute run_cv.py ---
+echo "Running K-Fold CV via run_cv.py..."
+python run_cv.py "${CV_ARGS[@]}"
 
-    # <<< Define and create the output directory for this specific fold >>>
-    FOLD_OUTPUT_PATH="${MAIN_JOB_DIR}/fold_${k}"
-    mkdir -p "$FOLD_OUTPUT_PATH"
-    FOLD_PATHS+=("$FOLD_OUTPUT_PATH") # Store full path for summary later
+if [ $? -ne 0 ]; then
+    echo "Error: run_cv.py script failed." >&2
+    exit 1
+fi
 
-    # --- Training Phase ---
-    echo "--- Training Fold $k ---"
-    # Construct training args
-    TRAIN_ARGS=(
-        --is_training 1
-        --k_folds $K_FOLDS
-        --fold $k
-        --model_id "$CURRENT_FOLD_ID" # Use fold-specific ID
-        # --run_timestamp "$FOLD_RUN_TIMESTAMP" # Removed
-        # --setting_file_path "$SETTING_FILE_PATH" # Removed
-        --output_path "$FOLD_OUTPUT_PATH" # Pass the exact output path for this fold
-        --model "$MODEL"
-        --data "$DATA"
-        --root_path "$ROOT_PATH"
-        --data_path "$TRAIN_DATA" # Use training data
-        --features "$FEATURES"
-        --target "$TARGET"
-        --seq_len "$SEQ_LEN"
-        --label_len "$LABEL_LEN"
-        --pred_len "$PRED_LEN"
-        --enc_in "$ENC_IN"
-        --dec_in "$DEC_IN"
-        --c_out "$C_OUT"
-        --d_model "$D_MODEL"
-        --n_heads "$N_HEADS"
-        --e_layers "$E_LAYERS"
-        --d_layers "$D_LAYERS"
-        --d_ff "$D_FF"
-        --moving_avg "$MOVING_AVG"
-        --factor "$FACTOR"
-        --devices "$DEVICES"
-        --train_epochs "$TRAIN_EPOCHS_PER_FOLD"
-        --batch_size "$BATCH_SIZE"
-        --num_workers "$NUM_WORKERS"
-        --patience "$PATIENCE"
-        --learning_rate "$LEARNING_RATE"
-        --dropout "$DROPOUT"
-        --weight_decay $WEIGHT_DECAY
-        --lradj $LRADJ
-        --lr_decay_factor $LR_DECAY_FACTOR
-        --lr_decay_period $LR_DECAY_PERIOD
-        --scheduler $SCHEDULER
-        --cosine_T_max $COSINE_T_MAX
-        --cosine_eta_min $COSINE_ETA_MIN
-        --use_norm $USE_NORM
-        $( [[ "$INVERSE" == true ]] && echo "--inverse" )
-        --optimizer adamw
-        --lr_warmup_epochs "$LR_WARMUP_EPOCHS"
-        --main_decay_epochs "$MAIN_DECAY_EPOCHS"
-        $( [ ! -z "$EXPLOIT_LR" ] && echo "--exploit_lr $EXPLOIT_LR" )
-        --exploit_cycle_epochs "$EXPLOIT_CYCLE_EPOCHS"
-    )
-    if [ "$USE_AMP" = True ]; then TRAIN_ARGS+=(--use_amp); fi
+# --- Summary Generation (Now handled within run_cv.py) ---
+# The summary generation logic is moved inside run_cv.py
+# We just need to report the final status and location
 
-    echo "Running training command (Output Path: $FOLD_OUTPUT_PATH)..."
-    python run.py "${TRAIN_ARGS[@]}"
+# Remove old summary generation loop
+# FOLD_PATHS=() ... for loop ... done
 
-    if [ $? -ne 0 ]; then
-        echo "Error: Training Fold $k failed. Exiting." >&2
-        exit 1
-    fi
-    # Verify the directory exists (it should)
-    if [ -d "$FOLD_OUTPUT_PATH" ]; then
-        echo "Training Fold $k finished. Checkpoint saved in $FOLD_OUTPUT_PATH"
-    else
-        # This shouldn't happen if python script ran successfully, but good to check
-        echo "Error: Output directory $FOLD_OUTPUT_PATH not found after training Fold $k." >&2
-        exit 1
-    fi
-
-
-    # --- Testing Phase (using the checkpoint from this fold) ---
-    echo "--- Testing Fold $k Model on $TEST_DATA ---"
-    # Construct testing args (use the same setting file path to load the correct setting)
-    TEST_ARGS=(
-        --is_training 0
-        # --setting_file_path "$SETTING_FILE_PATH" # Removed
-        # --k_folds 0 # Keep k_folds > 0 info if needed by run.py logic, but fold splitting is off
-        # --fold 0    # Keep fold number consistent with training? Or set to 0? Let's keep it $k
-        --fold $k
-        --output_path "$FOLD_OUTPUT_PATH" # Pass the exact path to load model and save results
-        --model_id "$CURRENT_FOLD_ID" # Keep model ID consistent
-        --model "$MODEL"
-        --data "$DATA"
-        --root_path "$ROOT_PATH"
-        --data_path "$TEST_DATA" # <<< Use TEST data path
-        --features "$FEATURES"
-        --target "$TARGET"
-        --seq_len "$SEQ_LEN"
-        --label_len "$LABEL_LEN"
-        --pred_len "$PRED_LEN"
-        --enc_in "$ENC_IN"
-        --dec_in "$DEC_IN"
-        --c_out "$C_OUT"
-        --d_model "$D_MODEL"
-        --n_heads "$N_HEADS"
-        --e_layers "$E_LAYERS"
-        --d_layers "$D_LAYERS"
-        --d_ff "$D_FF"
-        --moving_avg "$MOVING_AVG"
-        --factor "$FACTOR"
-        --devices "$DEVICES"
-        --batch_size "$TEST_BATCH_SIZE" # Use test batch size
-        --num_workers "$NUM_WORKERS"
-        --patience "$PATIENCE"
-        --learning_rate "$LEARNING_RATE"
-        --dropout "$DROPOUT"
-        --weight_decay $WEIGHT_DECAY
-        --lradj 'none'
-        --scheduler 'none'
-        --use_norm $USE_NORM
-        --inverse
-        --optimizer adamw
-    )
-     if [ "$USE_AMP" = True ]; then TEST_ARGS+=(--use_amp); fi
-
-    echo "Running testing command (Output Path: $FOLD_OUTPUT_PATH)..."
-    python run.py "${TEST_ARGS[@]}"
-
-    if [ $? -ne 0 ]; then
-        echo "Warning: Testing Fold $k failed." >&2
-        # Continue to next fold, but log the failure
-    else
-       echo "Testing Fold $k finished. Results saved in $FOLD_OUTPUT_PATH"
-    fi
-
-done
+echo ""
+echo "===== K-Fold Run Finished (via run_cv.py) ====="
+echo "Main Output Directory: $MAIN_JOB_DIR"
+SUMMARY_FILE="${MAIN_JOB_DIR}/cv_summary_results.txt"
+if [ -f "$SUMMARY_FILE" ]; then
+    echo "Summary saved to $SUMMARY_FILE"
+    # Optionally display summary content
+    # echo "--- Summary ---"
+    # cat "$SUMMARY_FILE"
+    # echo "---------------"
+else
+    echo "Warning: Summary file $SUMMARY_FILE not found."
+fi
+echo "Check detailed results in the respective fold directories within $MAIN_JOB_DIR"
 
 # --- Summary Generation ---
 echo ""
