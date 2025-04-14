@@ -249,6 +249,29 @@ if __name__ == '__main__':
             all_fold_metrics.append(None)
         # --- End Metric Collection ---
 
+        # --- Collect Best Validation Loss ---
+        try:
+            val_loss_path = os.path.join(fold_args.output_path, 'best_vali_loss.txt')
+            if os.path.exists(val_loss_path):
+                with open(val_loss_path, 'r') as f_val:
+                    best_val_loss_str = f_val.read().strip()
+                    try:
+                        best_val_loss = float(best_val_loss_str)
+                        # Use index k directly as it corresponds to the current fold
+                        if all_fold_metrics[k] is not None: # Check if metrics dict exists
+                            all_fold_metrics[k]['Best Val Loss'] = best_val_loss
+                            print(f"Fold {k} Best Validation Loss collected: {best_val_loss:.7f}")
+                        else: # If metrics dict was None, create one just for val loss
+                            all_fold_metrics[k] = {'Best Val Loss': best_val_loss}
+                            print(f"Fold {k} Best Validation Loss collected (metrics file was missing): {best_val_loss:.7f}")
+                    except ValueError:
+                        print(f"Warning: Could not parse best validation loss from {val_loss_path} for fold {k}")
+            else:
+                print(f"Warning: Best validation loss file not found for fold {k} at {val_loss_path}")
+        except Exception as e:
+            print(f"Warning: Error collecting best validation loss for fold {k}: {e}")
+        # --- End Best Validation Loss Collection ---
+
         torch.cuda.empty_cache()
         # --- End Fold ---
 
@@ -264,38 +287,92 @@ if __name__ == '__main__':
         f.write(f"# K-Fold CV Summary (K={args.k_folds})\n")
         f.write(f"# Base Path: {args.cv_base_path}\n")
         f.write(f"# Timestamp: {time.strftime('%Y%m%d_%H%M%S')}\n\n")
-        f.write("Fold | MSE       | MAE       | ... (Add other metrics)\n")
-        f.write("-----|-----------|-----------|------------------------\n")
+        f.write("Fold | Best Val Loss | MSE       | MAE       | ... (Add other metrics)\n")
+        f.write("-----|---------------|-----------|-----------|------------------------\n")
 
         for i, metrics in enumerate(all_fold_metrics):
-            if metrics and 'Voltage MSE' in metrics and 'Voltage MAE' in metrics:
-                 mse = metrics['Voltage MSE']
-                 mae = metrics['Voltage MAE']
-                 f.write(f"{i:<4} | {mse:<9.7f} | {mae:<9.7f} | ...\n")
-                 # Accumulate for averaging
-                 for key, value in metrics.items():
-                      if isinstance(value, (int, float)): # Only average numeric metrics
-                           avg_metrics[key] = avg_metrics.get(key, 0) + value
-                 valid_fold_count += 1
-            else:
-                 f.write(f"{i:<4} | ---       | ---       | Error or Missing Metrics\n")
+            if metrics: # Check if metrics dict exists for the fold
+                 mse = metrics.get('Voltage MSE', float('nan')) # Use .get with default NaN
+                 mae = metrics.get('Voltage MAE', float('nan'))
+                 best_val = metrics.get('Best Val Loss', float('nan')) # Get best val loss
 
-        f.write("-----|-----------|-----------|------------------------\n")
+                 # Format values, handling potential NaN
+                 mse_str = f"{mse:<9.7f}" if not np.isnan(mse) else "---      "
+                 mae_str = f"{mae:<9.7f}" if not np.isnan(mae) else "---      "
+                 best_val_str = f"{best_val:<13.7f}" if not np.isnan(best_val) else "---          "
+
+                 f.write(f"{i:<4} | {best_val_str} | {mse_str} | {mae_str} | ...\n")
+
+                 # Accumulate for averaging (only if not NaN)
+                 accumulated_any = False
+                 if not np.isnan(best_val):
+                      avg_metrics['Best Val Loss'] = avg_metrics.get('Best Val Loss', 0) + best_val
+                      accumulated_any = True
+                 if not np.isnan(mse):
+                      avg_metrics['Voltage MSE'] = avg_metrics.get('Voltage MSE', 0) + mse
+                      accumulated_any = True
+                 if not np.isnan(mae):
+                      avg_metrics['Voltage MAE'] = avg_metrics.get('Voltage MAE', 0) + mae
+                      accumulated_any = True
+
+                 # Accumulate other numeric metrics (original logic, check for NaN just in case)
+                 for key, value in metrics.items():
+                      if key not in ['Best Val Loss', 'Voltage MSE', 'Voltage MAE'] and isinstance(value, (int, float)) and not np.isnan(value):
+                           avg_metrics[key] = avg_metrics.get(key, 0) + value
+                           accumulated_any = True
+
+                 if accumulated_any: # Increment count only if we have *some* valid numeric metrics for the fold
+                      valid_fold_count += 1
+            else:
+                 # Handle case where metrics dict itself is None (e.g., initial collection failed)
+                 f.write(f"{i:<4} | ---           | ---       | ---       | Error or Missing Metrics\n")
+
+        f.write("-----|---------------|-----------|-----------|------------------------\n")
         if valid_fold_count > 0:
             f.write("Avg  |")
-            for key in avg_metrics:
+            # Define the desired order and formatting for key metrics
+            metric_order = ['Best Val Loss', 'Voltage MSE', 'Voltage MAE'] # Add others if needed
+            metric_formats = {
+                'Best Val Loss': "{:<13.7f}",
+                'Voltage MSE':   "{:<9.7f}",
+                'Voltage MAE':   "{:<9.7f}",
+                # Add formats for other metrics if they are averaged (e.g., 'Voltage RMSE': "{:<9.7f}")
+            }
+            default_format = "{:<9.3f}" # Default for any other numeric metrics found
+
+            # Write averages in the defined order
+            for key in metric_order:
+                if key in avg_metrics:
+                    avg_value = avg_metrics[key] / valid_fold_count
+                    fmt = metric_formats.get(key, default_format)
+                    f.write(f" {fmt.format(avg_value)} |")
+                else:
+                    # Handle case where a key metric might be missing in all valid folds
+                    width = 13 if key == 'Best Val Loss' else 9
+                    f.write(f" {'---':<{width}} |")
+
+            # Write averages for any other collected numeric metrics not in the primary order
+            other_keys = [k for k in avg_metrics if k not in metric_order and isinstance(avg_metrics[k], (int, float))]
+            for key in sorted(other_keys): # Sort for consistency
                  avg_value = avg_metrics[key] / valid_fold_count
-                 # Basic formatting, adjust width as needed
-                 if 'MSE' in key or 'MAE' in key:
-                      f.write(f" {avg_value:<9.7f} |")
-                 else:
-                      f.write(f" {avg_value:<9.3f} |") # Example for other metrics
+                 fmt = metric_formats.get(key, default_format) # Use default or specific format if added
+                 f.write(f" {fmt.format(avg_value)} |")
+
             f.write(" ...\n")
+
+            # Print averages to console
             print("\nAverage Metrics Across Valid Folds:")
-            for key, value in avg_metrics.items():
-                 print(f"  {key}: {value / valid_fold_count:.7f}")
+            # Print averages in the defined order first
+            for key in metric_order:
+                 if key in avg_metrics:
+                      print(f"  {key}: {avg_metrics[key] / valid_fold_count:.7f}")
+            # Print other averages
+            for key in sorted(other_keys):
+                 # Adjust precision if needed for console output
+                 print(f"  {key}: {avg_metrics[key] / valid_fold_count:.7f}")
         else:
-            f.write("Avg  | ---       | ---       | No valid folds found for averaging.\n")
+            # Update the 'no valid folds' message to match the new column structure
+            f.write("Avg  | ---           | ---       | ---       | No valid folds found for averaging.\n")
             print("\nCould not calculate average metrics (no valid folds found).")
 
     print("\n===== K-Fold Run Finished =====")
